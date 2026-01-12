@@ -222,7 +222,8 @@
     <input id="importTree" type="file" accept="application/json" style="display: none;" />
 
     <div id="instructions">
-      <strong>VULCAN LOGIC:</strong><br />
+      <strong>Connecting:</strong><br />
+      1. First select one node, and while holding CNTRL select a second node.<br />
       1. To connect a child to parents: Connect Mother to Father as "Partner". A pink dot (Union) appears. <br />
       2. Then select a Parent, then the Child, and click "Connect". The line will route through the Union.<br />
       3. Use "Re-Align" to group partners closely.
@@ -268,7 +269,7 @@
     'use strict';
 
     let activeNodeId = null; 
-    let selectionList = [];
+    let selectionOrder = []; // Track the order of selection
 
     const cy = cytoscape({
       container: document.getElementById('cy'),
@@ -443,10 +444,45 @@
 
     function updateActionButtons() {
       const selectedPeople = cy.nodes('node[type="person"]:selected');
-      selectionList = selectedPeople.toArray();
+      const selectedEdges = cy.edges(':selected');
+      
       connectBtn.disabled = selectedPeople.length !== 2;
-      disconnectBtn.disabled = cy.elements(':selected').length === 0;
+      
+      // Determine if "Remove Link" should be active
+      let canRemove = selectedEdges.length > 0;
+      
+      // If exactly two people are selected, check if they have a direct or union-mediated link
+      if (!canRemove && selectedPeople.length === 2) {
+          const p1 = selectedPeople[0];
+          const p2 = selectedPeople[1];
+          // Check for direct edges between them
+          const directEdges = p1.edgesWith(p2);
+          if (directEdges.nonempty()) {
+              canRemove = true;
+          } else {
+              // Check for edges through a shared Union node
+              const unions = p1.neighborhood('node[type="union"]');
+              unions.forEach(u => {
+                  if (u.edgesWith(p2).nonempty()) canRemove = true;
+              });
+          }
+      }
+      
+      disconnectBtn.disabled = !canRemove;
     }
+
+    cy.on('select', 'node[type="person"]', (evt) => {
+      selectionOrder.push(evt.target);
+      if (selectionOrder.length > 2) selectionOrder.shift();
+      updateActionButtons();
+    });
+
+    cy.on('unselect', 'node[type="person"]', (evt) => {
+      selectionOrder = selectionOrder.filter(n => n.id() !== evt.target.id());
+      updateActionButtons();
+    });
+
+    cy.on('select unselect', 'edge', updateActionButtons);
 
     searchBar.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
@@ -473,10 +509,11 @@
     });
 
     connectBtn.addEventListener('click', () => {
-      if (selectionList.length !== 2) return;
-      const s = selectionList[0];
-      const t = selectionList[1];
+      if (selectionOrder.length !== 2) return;
+      const s = selectionOrder[0]; // First selected is Parent
+      const t = selectionOrder[1]; // Second selected is Child
       const type = document.getElementById('relType').value;
+      
       if (type === 'partner') {
         const unionId = `u_${s.id()}_${t.id()}`;
         const midX = (s.position().x + t.position().x) / 2;
@@ -489,38 +526,39 @@
       } else {
         const unions = s.neighborhood('node[type="union"]');
         const sourceId = unions.nonempty() ? unions.first().id() : s.id();
-        cy.add({ group: 'edges', data: { id: 'e' + Date.now(), source: sourceId, target: t.id(), relType: 'parent-child' } });
+        cy.add({ 
+          group: 'edges', 
+          data: { 
+            id: 'e' + Date.now(), 
+            source: sourceId, 
+            target: t.id(), 
+            relType: 'parent-child' 
+          } 
+        });
       }
-      cy.nodes().unselect();
+      cy.elements().unselect();
+      selectionOrder = [];
       updateActionButtons();
     });
 
     autoLayoutBtn.addEventListener('click', () => {
-      // 1. Initial Hierarchical Layout
       const layout = cy.layout({
         name: 'breadthfirst',
         directed: true,
         padding: 80,
-        spacingFactor: 1.1, // Tighter spacing
+        spacingFactor: 1.1, 
         animate: true,
         stop: () => {
-          // 2. Post-process Partner Proximity
-          // For every Union node, pull its two parents closer together horizontally.
           cy.nodes('node[type="union"]').forEach(unionNode => {
             const partners = unionNode.neighborhood('node[type="person"]');
             if (partners.length === 2) {
               const p1 = partners[0];
               const p2 = partners[1];
               const unionPos = unionNode.position();
-              
-              // Move partners to be exactly 120 pixels apart (60 each side of union)
-              // This is efficient and ensures they don't drift based on breadthfirst logic
               p1.position({ x: unionPos.x - 70, y: unionPos.y });
               p2.position({ x: unionPos.x + 70, y: unionPos.y });
             }
           });
-
-          // 3. Final Badge Sync
           cy.nodes('[type="person"]').forEach(n => updateBadgePosition(n));
         }
       });
@@ -528,8 +566,27 @@
     });
 
     disconnectBtn.addEventListener('click', () => {
-      cy.elements(':selected').remove();
+      const selectedEdges = cy.edges(':selected');
+      if (selectedEdges.nonempty()) {
+          selectedEdges.remove();
+      } else {
+          // If no edges selected, check nodes in selectionOrder
+          const selectedPeople = cy.nodes('node[type="person"]:selected');
+          if (selectedPeople.length === 2) {
+              const p1 = selectedPeople[0];
+              const p2 = selectedPeople[1];
+              // Remove direct edges
+              p1.edgesWith(p2).remove();
+              // Remove edges mediated by union
+              const unions = p1.neighborhood('node[type="union"]');
+              unions.forEach(u => u.edgesWith(p2).remove());
+          }
+      }
       updateActionButtons();
+    });
+
+    toggleThemeBtn.addEventListener('click', () => {
+      document.body.classList.toggle('light');
     });
 
     cy.on('tap', 'node[type="badge"]', (evt) => {
@@ -548,7 +605,9 @@
       modalBackdrop.style.display = 'flex';
     }
 
+    document.getElementById('modalCloseX').addEventListener('click', () => modalBackdrop.style.display = 'none');
     closeModalBtn.addEventListener('click', () => modalBackdrop.style.display = 'none');
+    
     saveCharacterBtn.addEventListener('click', () => {
       const node = cy.getElementById(activeNodeId);
       const b = modalBirthDate.value;
@@ -559,6 +618,8 @@
       modalBackdrop.style.display = 'none';
     });
 
+    document.getElementById('addPhotoBtn').addEventListener('click', () => photoInput.click());
+
     photoInput.addEventListener('change', () => {
       const file = photoInput.files[0];
       if (!file) return;
@@ -567,7 +628,15 @@
       r.readAsDataURL(file);
     });
 
-    cy.on('select unselect', updateActionButtons);
+    deleteNodeBtn.addEventListener('click', () => {
+      const node = cy.getElementById(activeNodeId);
+      const badge = cy.getElementById(activeNodeId + '_badge');
+      node.remove();
+      badge.remove();
+      modalBackdrop.style.display = 'none';
+      updateActionButtons();
+    });
+
     saveTreeBtn.addEventListener('click', () => {
       const nodes = cy.nodes().map(n => ({ data: n.data(), position: n.position() }));
       const edges = cy.edges().map(e => ({ data: e.data() }));
