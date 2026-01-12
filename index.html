@@ -105,7 +105,7 @@
       background: var(--modal-bg); 
       width: 500px; 
       max-width: 100%; 
-      height: 80vh; 
+      height: 85vh; 
       border-radius: 12px; 
       padding: 24px; 
       display: flex; 
@@ -244,6 +244,9 @@
       <label>Birth date</label>
       <input id="modalBirthDate" type="date" />
 
+      <label>Death date</label>
+      <input id="modalDeathDate" type="date" />
+
       <div style="flex-grow: 1;"></div>
 
       <button id="saveCharacter">Save Changes</button>
@@ -283,7 +286,6 @@
             'z-index': 1
           }
         },
-        // Refined selector to prevent parsing errors on empty data(photo) strings
         {
           selector: 'node[photo]',
           style: {
@@ -362,6 +364,7 @@
     const modalFirstName = document.getElementById('modalFirstName');
     const modalLastName = document.getElementById('modalLastName');
     const modalBirthDate = document.getElementById('modalBirthDate');
+    const modalDeathDate = document.getElementById('modalDeathDate');
     const photoInput = document.getElementById('photoInput');
     const addPhotoBtn = document.getElementById('addPhotoBtn');
     const photoPreview = document.getElementById('photoPreview');
@@ -370,18 +373,11 @@
     const modalCloseX = document.getElementById('modalCloseX');
     const deleteNodeBtn = document.getElementById('deleteNode');
 
-    /**
-     * Build label logic:
-     * If full name has data, show full name
-     * if firstname has data then show firstname (show both if both are filled)
-     * and then lastname
-     */
     function buildLabel(fn, first, ln) {
       let labelParts = [];
       if (fn && fn.trim()) labelParts.push(fn.trim());
       if (first && first.trim()) labelParts.push(first.trim());
       if (ln && ln.trim()) labelParts.push(ln.trim());
-      
       return labelParts.join('\n');
     }
 
@@ -413,6 +409,7 @@
       modalFirstName.value = node.data('firstName') || '';
       modalLastName.value = node.data('lastName') || '';
       modalBirthDate.value = node.data('birthDate') || '';
+      modalDeathDate.value = node.data('deathDate') || '';
       photoPreview.src = node.data('photo') || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
       
       modalElement.scrollTop = 0;
@@ -448,7 +445,6 @@
       const posY = ((cy.height() / 2) - pan.y) / zoom;
       
       const id = 'n' + Date.now();
-      // On creation from sidebar, we map current "First name" input to "firstName" property
       const label = buildLabel('', firstNameVal, lastNameVal);
       
       const person = cy.add({
@@ -461,6 +457,7 @@
           firstName: firstNameVal, 
           lastName: lastNameVal, 
           birthDate: birthDateVal, 
+          deathDate: '',
           photo: '' 
         },
         position: { x: posX, y: posY }
@@ -522,12 +519,14 @@
       const firstName = modalFirstName.value.trim();
       const lastName = modalLastName.value.trim();
       const birthDate = modalBirthDate.value;
+      const deathDate = modalDeathDate.value;
       
       node.data({ 
         fullName,
         firstName, 
         lastName, 
-        birthDate, 
+        birthDate,
+        deathDate,
         label: buildLabel(fullName, firstName, lastName) 
       });
       requestAnimationFrame(() => updateBadgePosition(node));
