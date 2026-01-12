@@ -4,13 +4,9 @@
   <meta charset="UTF-8" />
   <title>Heritage – Family Tree Builder</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Lightweight graph library -->
   <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
-
   <style>
     * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
-
     :root {
       --bg-color: #111827;
       --sidebar-bg: #1f2933;
@@ -21,7 +17,6 @@
       --cy-bg: #030712;
       --modal-bg: #1f2933;
     }
-
     body.light {
       --bg-color: #f4f6f8;
       --sidebar-bg: #ffffff;
@@ -32,7 +27,6 @@
       --cy-bg: #f9fafb;
       --modal-bg: #ffffff;
     }
-
     body { 
       margin: 0; 
       display: flex; 
@@ -43,7 +37,6 @@
       color: var(--text-color);
       transition: background 0.3s, color 0.3s;
     }
-
     #sidebar { 
       width: 300px; 
       padding: 16px; 
@@ -55,11 +48,41 @@
       z-index: 10; 
       overflow-y: auto;
     }
-
-    #sidebar h2 { margin: 0 0 8px 0; font-size: 18px; }
+    #sidebarHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    #sidebar h2 { margin: 0; font-size: 18px; }
+    
+    .search-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: all 0.2s ease-in-out;
+    }
+    #searchToggleBtn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+    }
+    #searchToggleBtn:hover {
+      background: rgba(255,255,255,0.05);
+    }
+    #searchWrapper {
+      display: none;
+      margin-top: 8px;
+    }
 
     label { font-size: 13px; opacity: 0.8; }
-    input, select { 
+    input { 
       padding: 8px; 
       font-size: 14px; 
       border: 1px solid var(--border-color); 
@@ -68,7 +91,6 @@
       background: var(--input-bg);
       color: var(--input-text);
     }
-
     button { 
       padding: 12px; 
       border: none; 
@@ -79,16 +101,18 @@
       cursor: pointer; 
       transition: opacity 0.2s, background 0.2s; 
       width: 100%;
+      font-weight: 600;
     }
     button:hover { opacity: 0.9; }
     button.secondary { background: #6b7280; }
-    button.danger { background: #ef4444; margin-top: 10px; }
-    button:disabled { background: #4b5563; cursor: not-allowed; opacity: 0.5; }
+    button.danger { background: #ef4444; }
+    button:disabled { cursor: not-allowed; opacity: 0.3; }
+
+    #btnMarriage { background-color: #ec4899; color: white; }
+    #btnChild { background-color: #86efac; color: #064e3b; }
 
     #instructions { font-size: 11px; opacity: 0.7; margin-top: auto; line-height: 1.4; padding-top: 20px; }
     #cy { flex: 1; background: var(--cy-bg); position: relative; }
-
-    /* Modal Styling */
     #modalBackdrop { 
       position: fixed; 
       inset: 0; 
@@ -99,7 +123,6 @@
       z-index: 1000; 
       padding: 20px;
     }
-    
     #modal { 
       background: var(--modal-bg); 
       width: 500px; 
@@ -114,7 +137,6 @@
       overflow-y: auto;
       position: relative;
     }
-
     #modalCloseX {
       position: absolute;
       top: 12px;
@@ -133,7 +155,6 @@
       line-height: 1;
       padding: 0;
     }
-    
     #photoContainer {
       position: relative;
       align-self: center;
@@ -141,7 +162,6 @@
       height: 120px;
       margin-bottom: 10px;
     }
-
     #modal img { 
       width: 100%; 
       height: 100%; 
@@ -151,7 +171,6 @@
       border: 3px solid #2563eb;
       display: block;
     }
-
     #addPhotoBtn {
       position: absolute;
       right: -5px;
@@ -169,9 +188,20 @@
       font-size: 20px;
       font-weight: bold;
     }
-
     #validationError { color: #ef4444; font-size: 12px; display: none; text-align: center; }
-
+    #logicToast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #ef4444;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 2000;
+      display: none;
+      font-weight: 500;
+    }
     @media (max-width: 768px) {
       body { flex-direction: column; }
       #sidebar { width: 100%; height: auto; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--border-color); }
@@ -180,85 +210,79 @@
   </style>
 </head>
 <body class="dark">
-
   <div id="sidebar">
-    <h2>Heritage Tree</h2>
-
-    <div>
-      <label>Search Members</label>
-      <input id="searchBar" placeholder="Find ancestor..." />
+    <div id="sidebarHeader">
+      <h2>Heritage Tree</h2>
+      <button id="searchToggleBtn" title="Search Ancestors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
+    </div>
+    
+    <div id="searchWrapper">
+      <label>Find Ancestor</label>
+      <input id="searchBar" placeholder="Type a name..." />
     </div>
 
     <hr style="width: 100%; border: 0; border-top: 1px solid var(--border-color); margin: 8px 0;" />
-
+    
     <label>First name</label>
     <input id="firstName" placeholder="First" />
-
     <label>Last name</label>
     <input id="lastName" placeholder="Last" />
-
     <label>Birth date</label>
     <input id="birthDate" type="date" />
-
     <button id="addNode">Create Member</button>
 
-    <div style="margin-top: 8px;">
-      <label>Connection Logic</label>
-      <select id="relType">
-        <option value="parent-child">Parent → Child</option>
-        <option value="partner">Partner (Marriage)</option>
-      </select>
+    <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+      <button id="btnMarriage" disabled>Marriage</button>
+      <button id="btnChild" disabled>Child</button>
     </div>
-    <button id="connectNodes" class="secondary" disabled>Connect Selected</button>
+
+    <hr style="width: 100%; border: 0; border-top: 1px solid var(--border-color); margin: 8px 0;" />
     
-    <button id="autoLayout" class="secondary">Re-Align Tree (Hierarchy)</button>
-    <button id="disconnectNodes" class="secondary" disabled>Remove Link</button>
-    <button id="toggleTheme" class="secondary">Toggle Light/Dark</button>
-    
+    <button id="autoLayout" class="secondary">Re-Align Tree</button>
+    <button id="disconnectNodes" class="secondary" disabled>Remove Item</button>
+    <button id="toggleTheme" class="secondary">Toggle Theme</button>
     <div style="display: flex; gap: 8px;">
-      <button id="saveTree" class="secondary">Export JSON</button>
+      <button id="saveTree" class="secondary">Export</button>
       <button id="importTrigger" class="secondary" onclick="document.getElementById('importTree').click()">Import</button>
     </div>
     <input id="importTree" type="file" accept="application/json" style="display: none;" />
-
+    <button id="clearBoard" class="danger" style="margin-top: 8px;">CLEAR BOARD</button>
+    
     <div id="instructions">
-      <strong>Connecting:</strong><br />
-      1. First select one node, and while holding CNTRL select a second node.<br />
-      1. To connect a child to parents: Connect Mother to Father as "Partner". A pink dot (Union) appears. <br />
-      2. Then select a Parent, then the Child, and click "Connect". The line will route through the Union.<br />
-      3. Use "Re-Align" to group partners closely.
+      <strong>INSTRUCTIONS:</strong><br />
+      1. Click to select items (no CTRL needed).<br />
+      2. <strong>Marriage:</strong> Select two people, click Marriage.<br />
+      3. <strong>Child:</strong> Select the <strong>Union Dot</strong> then the <strong>Child</strong>, click Child.<br />
+      4. <strong>Re-Align:</strong> Automatically organizes marriages side-by-side with children below.
     </div>
   </div>
-
   <div id="cy"></div>
-
+  <div id="logicToast">Operation failed. Check selection logic.</div>
+  
   <div id="modalBackdrop">
     <div id="modal">
       <button id="modalCloseX" title="Close">✕</button>
       <h3 style="margin: 0; text-align: center;">Member Details</h3>
-      
       <div id="photoContainer">
         <img id="photoPreview" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" />
         <button id="addPhotoBtn" title="Upload Photo">+</button>
       </div>
       <input id="photoInput" type="file" accept="image/*" style="display: none;" />
-
       <label>First name</label>
       <input id="modalFirstName" placeholder="First" />
-
       <label>Last name</label>
       <input id="modalLastName" placeholder="Last" />
-
       <label>Birth date</label>
       <input id="modalBirthDate" type="date" />
-
       <label>Death date</label>
       <input id="modalDeathDate" type="date" />
-      
       <div id="validationError">Chronological error: Death precedes birth.</div>
-
       <div style="flex-grow: 1;"></div>
-
       <button id="saveCharacter">Save Changes</button>
       <button id="closeModal" class="secondary">Cancel</button>
       <button id="deleteNode" class="danger">Delete Member</button>
@@ -267,12 +291,11 @@
 
   <script>
     'use strict';
-
     let activeNodeId = null; 
-    let selectionOrder = []; // Track the order of selection
-
+    let selectionOrder = []; 
     const cy = cytoscape({
       container: document.getElementById('cy'),
+      selectionType: 'additive', 
       style: [
         {
           selector: 'node[type="person"]',
@@ -300,11 +323,17 @@
           selector: 'node[type="union"]',
           style: {
             'shape': 'ellipse',
-            'width': 10,
-            'height': 10,
+            'width': 14,
+            'height': 14,
             'background-color': '#ec4899',
-            'z-index': 5
+            'z-index': 15,
+            'border-width': 2,
+            'border-color': '#ffffff'
           }
+        },
+        {
+            selector: 'node[type="union"]:selected',
+            style: { 'border-color': '#3b82f6', 'border-width': 4 }
         },
         {
           selector: 'node[photo]',
@@ -314,19 +343,12 @@
               return (p && p.length > 0) ? p : 'none';
             },
             'background-fit': 'cover',
-            'background-image-opacity': function(node) {
-              return node.data('photo') ? 1 : 0;
-            }
+            'background-image-opacity': function(node) { return node.data('photo') ? 1 : 0; }
           }
         },
         {
           selector: 'node[isDeceased]',
-          style: {
-            'background-color': '#374151',
-            'border-style': 'double',
-            'border-width': 3,
-            'opacity': 0.8
-          }
+          style: { 'background-color': '#374151', 'border-style': 'double', 'border-width': 3, 'opacity': 0.8 }
         },
         {
           selector: 'node[type="badge"]',
@@ -397,12 +419,10 @@
       let labelParts = [];
       const name = [first, ln].filter(x => x && x.trim()).join(' ').trim();
       if (name) labelParts.push(name);
-      
       let lifespan = "";
       if (birth) lifespan += new Date(birth).getFullYear();
       if (death) lifespan += " – " + new Date(death).getFullYear();
       else if (birth) lifespan += " – ";
-      
       if (lifespan) labelParts.push(lifespan);
       return labelParts.join('\n');
     }
@@ -420,16 +440,27 @@
       updateBadgePosition(personNode);
     }
 
+    function showLogicError(msg) {
+      const toast = document.getElementById('logicToast');
+      if (msg) toast.innerText = msg;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
     cy.on('position', 'node[type="person"]', (evt) => updateBadgePosition(evt.target));
 
     const addNodeBtn = document.getElementById('addNode');
-    const connectBtn = document.getElementById('connectNodes');
+    const marriageBtn = document.getElementById('btnMarriage');
+    const childBtn = document.getElementById('btnChild');
     const disconnectBtn = document.getElementById('disconnectNodes');
     const toggleThemeBtn = document.getElementById('toggleTheme');
     const autoLayoutBtn = document.getElementById('autoLayout');
+    const searchToggleBtn = document.getElementById('searchToggleBtn');
+    const searchWrapper = document.getElementById('searchWrapper');
     const searchBar = document.getElementById('searchBar');
     const saveTreeBtn = document.getElementById('saveTree');
     const importTreeInput = document.getElementById('importTree');
+    const clearBoardBtn = document.getElementById('clearBoard');
     const modalBackdrop = document.getElementById('modalBackdrop');
     const modalFirstName = document.getElementById('modalFirstName');
     const modalLastName = document.getElementById('modalLastName');
@@ -443,46 +474,28 @@
     const deleteNodeBtn = document.getElementById('deleteNode');
 
     function updateActionButtons() {
-      const selectedPeople = cy.nodes('node[type="person"]:selected');
+      const selectedNodes = cy.nodes(':selected');
       const selectedEdges = cy.edges(':selected');
+      const count = selectedNodes.length;
       
-      connectBtn.disabled = selectedPeople.length !== 2;
-      
-      // Determine if "Remove Link" should be active
-      let canRemove = selectedEdges.length > 0;
-      
-      // If exactly two people are selected, check if they have a direct or union-mediated link
-      if (!canRemove && selectedPeople.length === 2) {
-          const p1 = selectedPeople[0];
-          const p2 = selectedPeople[1];
-          // Check for direct edges between them
-          const directEdges = p1.edgesWith(p2);
-          if (directEdges.nonempty()) {
-              canRemove = true;
-          } else {
-              // Check for edges through a shared Union node
-              const unions = p1.neighborhood('node[type="union"]');
-              unions.forEach(u => {
-                  if (u.edgesWith(p2).nonempty()) canRemove = true;
-              });
-          }
-      }
-      
-      disconnectBtn.disabled = !canRemove;
+      marriageBtn.disabled = count !== 2;
+      childBtn.disabled = count !== 2;
+      disconnectBtn.disabled = count === 0 && selectedEdges.length === 0;
     }
 
-    cy.on('select', 'node[type="person"]', (evt) => {
-      selectionOrder.push(evt.target);
-      if (selectionOrder.length > 2) selectionOrder.shift();
-      updateActionButtons();
-    });
+    cy.on('select unselect', 'node, edge', updateActionButtons);
 
-    cy.on('unselect', 'node[type="person"]', (evt) => {
-      selectionOrder = selectionOrder.filter(n => n.id() !== evt.target.id());
-      updateActionButtons();
+    searchToggleBtn.addEventListener('click', () => {
+        const isVisible = searchWrapper.style.display === 'block';
+        searchWrapper.style.display = isVisible ? 'none' : 'block';
+        if (!isVisible) {
+            searchBar.focus();
+        } else {
+            // Clear highlights when closing search
+            searchBar.value = '';
+            cy.nodes().removeClass('highlight');
+        }
     });
-
-    cy.on('select unselect', 'edge', updateActionButtons);
 
     searchBar.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
@@ -508,86 +521,193 @@
       updateActionButtons();
     });
 
-    connectBtn.addEventListener('click', () => {
-      if (selectionOrder.length !== 2) return;
-      const s = selectionOrder[0]; // First selected is Parent
-      const t = selectionOrder[1]; // Second selected is Child
-      const type = document.getElementById('relType').value;
-      
-      if (type === 'partner') {
-        const unionId = `u_${s.id()}_${t.id()}`;
-        const midX = (s.position().x + t.position().x) / 2;
-        const midY = (s.position().y + t.position().y) / 2;
-        cy.add([
-          { group: 'nodes', data: { id: unionId, type: 'union' }, position: { x: midX, y: midY } },
-          { group: 'edges', data: { id: `e_${s.id()}_u`, source: s.id(), target: unionId, relType: 'partner' } },
-          { group: 'edges', data: { id: `e_${t.id()}_u`, source: t.id(), target: unionId, relType: 'partner' } }
-        ]);
-      } else {
-        const unions = s.neighborhood('node[type="union"]');
-        const sourceId = unions.nonempty() ? unions.first().id() : s.id();
-        cy.add({ 
-          group: 'edges', 
-          data: { 
-            id: 'e' + Date.now(), 
-            source: sourceId, 
-            target: t.id(), 
-            relType: 'parent-child' 
-          } 
-        });
+    marriageBtn.addEventListener('click', () => {
+      if (selectionOrder.length < 2) return;
+      const s = selectionOrder[selectionOrder.length - 2];
+      const t = selectionOrder[selectionOrder.length - 1];
+
+      if (!s || !t || s.data('type') !== 'person' || t.data('type') !== 'person') {
+          showLogicError("Select two people for marriage.");
+          return;
       }
+
+      const existingPartnerLink = s.neighborhood('node[type="union"]').filter(u => u.neighborhood('node[id="' + t.id() + '"]').nonempty());
+      if (existingPartnerLink.nonempty()) { 
+          showLogicError("Marriage already exists."); 
+          return; 
+      }
+
+      const unionId = `u_${s.id()}_${t.id()}`;
+      const midX = (s.position().x + t.position().x) / 2;
+      const midY = (s.position().y + t.position().y) / 2;
+      cy.add([
+        { group: 'nodes', data: { id: unionId, type: 'union' }, position: { x: midX, y: midY + 80 } },
+        { group: 'edges', data: { id: `e_${s.id()}_u`, source: s.id(), target: unionId, relType: 'partner' } },
+        { group: 'edges', data: { id: `e_${t.id()}_u`, source: t.id(), target: unionId, relType: 'partner' } }
+      ]);
+      
+      cy.elements().unselect();
+      selectionOrder = [];
+      updateActionButtons();
+    });
+
+    childBtn.addEventListener('click', () => {
+      if (selectionOrder.length < 2) return;
+      
+      const s = selectionOrder[selectionOrder.length - 2];
+      const t = selectionOrder[selectionOrder.length - 1];
+
+      if (!s || !t) return;
+
+      let parentSourceId = null;
+      let childTargetId = null;
+
+      if (t.data('type') !== 'person') {
+        showLogicError("Second selection must be the child.");
+        return;
+      }
+      childTargetId = t.id();
+
+      if (s.data('type') === 'union') {
+          parentSourceId = s.id();
+      } else if (s.data('type') === 'person') {
+          const unionsOfS = s.neighborhood('node[type="union"]');
+          if (unionsOfS.length > 1) {
+              showLogicError("Multiple unions. Select the specific Pink Dot and the child.");
+              return;
+          } else if (unionsOfS.length === 1) {
+              parentSourceId = unionsOfS.first().id();
+          } else {
+              const unionId = `u_single_${s.id()}_${Date.now()}`;
+              const pos = s.position();
+              cy.add([
+                  { group: 'nodes', data: { id: unionId, type: 'union' }, position: { x: pos.x, y: pos.y + 80 } },
+                  { group: 'edges', data: { id: `e_${s.id()}_${unionId}`, source: s.id(), target: unionId, relType: 'partner' } }
+              ]);
+              parentSourceId = unionId;
+          }
+      }
+
+      const alreadyExists = cy.edges(`edge[source="${parentSourceId}"][target="${childTargetId}"]`).nonempty();
+      if (alreadyExists) { 
+        showLogicError("Child connection already exists."); 
+        return; 
+      }
+      
+      cy.add({ group: 'edges', data: { id: 'e' + Date.now(), source: parentSourceId, target: childTargetId, relType: 'parent-child' } });
+      
       cy.elements().unselect();
       selectionOrder = [];
       updateActionButtons();
     });
 
     autoLayoutBtn.addEventListener('click', () => {
-      const layout = cy.layout({
-        name: 'breadthfirst',
-        directed: true,
-        padding: 80,
-        spacingFactor: 1.1, 
-        animate: true,
-        stop: () => {
-          cy.nodes('node[type="union"]').forEach(unionNode => {
-            const partners = unionNode.neighborhood('node[type="person"]');
-            if (partners.length === 2) {
-              const p1 = partners[0];
-              const p2 = partners[1];
-              const unionPos = unionNode.position();
-              p1.position({ x: unionPos.x - 70, y: unionPos.y });
-              p2.position({ x: unionPos.x + 70, y: unionPos.y });
-            }
-          });
-          cy.nodes('[type="person"]').forEach(n => updateBadgePosition(n));
+        const H_GAP = 220; 
+        const V_GAP = 350; 
+        const depthMap = new Map();
+        const personNodes = cy.nodes('[type="person"]');
+        if (personNodes.length === 0) return;
+        personNodes.forEach(n => depthMap.set(n.id(), 0));
+        let changed = true;
+        let iterations = 0;
+        const maxIterations = personNodes.length * 5; 
+        while (changed && iterations < maxIterations) {
+            changed = false;
+            iterations++;
+            personNodes.forEach(node => {
+                const nodeId = node.id();
+                const currentDepth = depthMap.get(nodeId);
+                const parentEdges = node.incomers('edge[relType="parent-child"]');
+                parentEdges.forEach(e => {
+                    const union = e.source();
+                    const partners = union.neighborhood('node[type="person"]').filter(p => union.edgesWith(p).some(edge => edge.data('relType') === 'partner'));
+                    partners.forEach(p => {
+                        const pDepth = depthMap.get(p.id());
+                        if (pDepth + 1 > currentDepth) {
+                            depthMap.set(nodeId, pDepth + 1);
+                            changed = true;
+                        }
+                    });
+                });
+                const unions = node.neighborhood('node[type="union"]');
+                unions.forEach(u => {
+                    const partners = u.neighborhood('node[type="person"]').filter(p => u.edgesWith(p).some(edge => edge.data('relType') === 'partner'));
+                    partners.forEach(p => {
+                        const pDepth = depthMap.get(p.id());
+                        const nDepth = depthMap.get(nodeId);
+                        if (pDepth !== nDepth) {
+                            const target = Math.max(pDepth, nDepth);
+                            depthMap.set(nodeId, target);
+                            depthMap.set(p.id(), target);
+                            changed = true;
+                        }
+                    });
+                });
+            });
         }
-      });
-      layout.run();
+        const levels = {};
+        personNodes.forEach(n => {
+            const d = depthMap.get(n.id());
+            if (!levels[d]) levels[d] = [];
+            levels[d].push(n);
+        });
+        Object.keys(levels).sort((a,b) => a-b).forEach(level => {
+            const levelNodes = levels[level];
+            const y = 100 + (parseInt(level) * V_GAP);
+            levelNodes.sort((a, b) => {
+                const parentAEdge = a.incomers('edge[relType="parent-child"]').first();
+                const parentBEdge = b.incomers('edge[relType="parent-child"]').first();
+                const posA = (parentAEdge.nonempty()) ? parentAEdge.source().position().x : (a.position().x || 0);
+                const posB = (parentBEdge.nonempty()) ? parentBEdge.source().position().x : (b.position().x || 0);
+                return posA - posB;
+            });
+            levelNodes.forEach((node, idx) => {
+                const x = idx * H_GAP;
+                node.position({ x, y });
+            });
+        });
+        cy.nodes('[type="union"]').forEach(u => {
+            const partners = u.neighborhood('node[type="person"]').filter(p => u.edgesWith(p).some(e => e.data('relType') === 'partner'));
+            if (partners.length === 2) {
+                const p1 = partners[0].position();
+                const p2 = partners[1].position();
+                u.position({ x: (p1.x + p2.x) / 2, y: p1.y + 100 });
+            } else if (partners.length === 1) {
+                const p1 = partners[0].position();
+                u.position({ x: p1.x, y: p1.y + 100 });
+            }
+        });
+        cy.nodes('[type="person"]').forEach(n => updateBadgePosition(n));
+        cy.fit(null, 50);
     });
 
     disconnectBtn.addEventListener('click', () => {
       const selectedEdges = cy.edges(':selected');
-      if (selectedEdges.nonempty()) {
-          selectedEdges.remove();
-      } else {
-          // If no edges selected, check nodes in selectionOrder
-          const selectedPeople = cy.nodes('node[type="person"]:selected');
-          if (selectedPeople.length === 2) {
-              const p1 = selectedPeople[0];
-              const p2 = selectedPeople[1];
-              // Remove direct edges
-              p1.edgesWith(p2).remove();
-              // Remove edges mediated by union
-              const unions = p1.neighborhood('node[type="union"]');
-              unions.forEach(u => u.edgesWith(p2).remove());
-          }
+      const selectedNodes = cy.nodes(':selected');
+      if (selectedEdges.nonempty()) selectedEdges.remove();
+      if (selectedNodes.nonempty()) {
+          selectedNodes.connectedEdges().remove();
+          selectedNodes.forEach(n => {
+              if (n.data('type') === 'person') {
+                  const badge = cy.getElementById(n.id() + '_badge');
+                  if (!badge.empty()) badge.remove();
+              }
+              n.remove();
+          });
       }
+      cy.nodes('node[type="union"]').forEach(u => { if (u.degree() === 0) u.remove(); });
       updateActionButtons();
     });
 
-    toggleThemeBtn.addEventListener('click', () => {
-      document.body.classList.toggle('light');
+    clearBoardBtn.addEventListener('click', () => {
+      if (confirm("Delete all data? This cannot be undone.")) { 
+        cy.elements().remove(); 
+        selectionOrder = []; 
+        updateActionButtons(); 
+      }
     });
+
+    toggleThemeBtn.addEventListener('click', () => document.body.classList.toggle('light'));
 
     cy.on('tap', 'node[type="badge"]', (evt) => {
       const parent = cy.getElementById(evt.target.data('parentId'));
@@ -607,7 +727,6 @@
 
     document.getElementById('modalCloseX').addEventListener('click', () => modalBackdrop.style.display = 'none');
     closeModalBtn.addEventListener('click', () => modalBackdrop.style.display = 'none');
-    
     saveCharacterBtn.addEventListener('click', () => {
       const node = cy.getElementById(activeNodeId);
       const b = modalBirthDate.value;
@@ -617,9 +736,7 @@
       updateBadgePosition(node);
       modalBackdrop.style.display = 'none';
     });
-
     document.getElementById('addPhotoBtn').addEventListener('click', () => photoInput.click());
-
     photoInput.addEventListener('change', () => {
       const file = photoInput.files[0];
       if (!file) return;
@@ -627,12 +744,12 @@
       r.onload = () => { photoPreview.src = r.result; cy.getElementById(activeNodeId).data('photo', r.result); };
       r.readAsDataURL(file);
     });
-
     deleteNodeBtn.addEventListener('click', () => {
       const node = cy.getElementById(activeNodeId);
       const badge = cy.getElementById(activeNodeId + '_badge');
-      node.remove();
-      badge.remove();
+      const neighborUnions = node.neighborhood('node[type="union"]');
+      node.remove(); if (!badge.empty()) badge.remove();
+      neighborUnions.forEach(u => { if (u.degree() === 0) u.remove(); });
       modalBackdrop.style.display = 'none';
       updateActionButtons();
     });
@@ -646,16 +763,42 @@
 
     importTreeInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
+      if (!file) return;
       const r = new FileReader();
       r.onload = () => {
-        const json = JSON.parse(r.result);
-        cy.elements().remove();
-        cy.add(json.nodes.map(n => ({ group: 'nodes', data: n.data, position: n.position })));
-        cy.add(json.edges.map(e => ({ group: 'edges', data: e.data })));
-        cy.nodes('[type="person"]').forEach(n => createBadge(n));
-        updateActionButtons();
+        try {
+            const json = JSON.parse(r.result);
+            cy.elements().remove();
+            selectionOrder = []; 
+            
+            cy.add(json.nodes.map(n => ({ group: 'nodes', data: n.data, position: n.position })));
+            cy.add(json.edges.map(e => ({ group: 'edges', data: e.data })));
+            
+            cy.nodes('[type="person"]').forEach(n => createBadge(n));
+            
+            updateActionButtons();
+            cy.fit(null, 50);
+        } catch (err) {
+            showLogicError("Import failed: Invalid file format.");
+        }
+        importTreeInput.value = ''; 
       };
       r.readAsText(file);
+    });
+
+    cy.on('select', 'node', (evt) => {
+      const target = evt.target;
+      if (!selectionOrder.find(n => n.id() === target.id())) {
+        selectionOrder.push(target);
+      }
+      if (selectionOrder.length > 2) {
+        const first = selectionOrder.shift();
+        first.unselect();
+      }
+    });
+
+    cy.on('unselect', 'node', (evt) => {
+      selectionOrder = selectionOrder.filter(n => n.id() !== evt.target.id());
     });
 
     window.addEventListener('resize', () => cy.resize());
