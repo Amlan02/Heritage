@@ -232,11 +232,14 @@
       </div>
       <input id="photoInput" type="file" accept="image/*" style="display: none;" />
 
+      <label>Full name</label>
+      <input id="modalFullName" placeholder="Full name" />
+
       <label>First name</label>
-      <input id="modalFirstName" />
+      <input id="modalFirstName" placeholder="First name" />
 
       <label>Last name</label>
-      <input id="modalLastName" />
+      <input id="modalLastName" placeholder="Last name" />
 
       <label>Birth date</label>
       <input id="modalBirthDate" type="date" />
@@ -355,6 +358,7 @@
     const importTreeInput = document.getElementById('importTree');
     const modalBackdrop = document.getElementById('modalBackdrop');
     const modalElement = document.getElementById('modal');
+    const modalFullName = document.getElementById('modalFullName');
     const modalFirstName = document.getElementById('modalFirstName');
     const modalLastName = document.getElementById('modalLastName');
     const modalBirthDate = document.getElementById('modalBirthDate');
@@ -366,8 +370,19 @@
     const modalCloseX = document.getElementById('modalCloseX');
     const deleteNodeBtn = document.getElementById('deleteNode');
 
-    function buildLabel(fn, ln, bd) {
-      return `${fn} ${ln}${bd ? '\nb. ' + bd : ''}`;
+    /**
+     * Build label logic:
+     * If full name has data, show full name
+     * if firstname has data then show firstname (show both if both are filled)
+     * and then lastname
+     */
+    function buildLabel(fn, first, ln) {
+      let labelParts = [];
+      if (fn && fn.trim()) labelParts.push(fn.trim());
+      if (first && first.trim()) labelParts.push(first.trim());
+      if (ln && ln.trim()) labelParts.push(ln.trim());
+      
+      return labelParts.join('\n');
     }
 
     function updateBadgePosition(personNode) {
@@ -394,6 +409,7 @@
 
     function openModal(node) {
       activeNodeId = node.id();
+      modalFullName.value = node.data('fullName') || '';
       modalFirstName.value = node.data('firstName') || '';
       modalLastName.value = node.data('lastName') || '';
       modalBirthDate.value = node.data('birthDate') || '';
@@ -416,15 +432,15 @@
     }
 
     addNodeBtn.addEventListener('click', () => {
-      const fnInput = document.getElementById('firstName');
-      const lnInput = document.getElementById('lastName');
-      const bdInput = document.getElementById('birthDate');
+      const firstInput = document.getElementById('firstName');
+      const lastInput = document.getElementById('lastName');
+      const birthInput = document.getElementById('birthDate');
       
-      const firstName = fnInput.value.trim();
-      const lastName = lnInput.value.trim();
-      const birthDate = bdInput.value;
+      const firstNameVal = firstInput.value.trim();
+      const lastNameVal = lastInput.value.trim();
+      const birthDateVal = birthInput.value;
       
-      if (!firstName || !lastName) return;
+      if (!firstNameVal && !lastNameVal) return;
       
       const pan = cy.pan();
       const zoom = cy.zoom();
@@ -432,19 +448,29 @@
       const posY = ((cy.height() / 2) - pan.y) / zoom;
       
       const id = 'n' + Date.now();
-      const label = buildLabel(firstName, lastName, birthDate);
+      // On creation from sidebar, we map current "First name" input to "firstName" property
+      const label = buildLabel('', firstNameVal, lastNameVal);
       
       const person = cy.add({
         group: 'nodes',
-        data: { id, type: 'person', label, firstName, lastName, birthDate, photo: '' },
+        data: { 
+          id, 
+          type: 'person', 
+          label, 
+          fullName: '', 
+          firstName: firstNameVal, 
+          lastName: lastNameVal, 
+          birthDate: birthDateVal, 
+          photo: '' 
+        },
         position: { x: posX, y: posY }
       });
       
       createBadge(person);
 
-      fnInput.value = '';
-      lnInput.value = '';
-      bdInput.value = '';
+      firstInput.value = '';
+      lastInput.value = '';
+      birthInput.value = '';
     });
 
     cy.on('position style', 'node[type="person"]', (evt) => updateBadgePosition(evt.target));
@@ -492,10 +518,18 @@
     saveCharacterBtn.addEventListener('click', () => {
       if (!activeNodeId) return;
       const node = cy.getElementById(activeNodeId);
-      const fn = modalFirstName.value.trim();
-      const ln = modalLastName.value.trim();
-      const bd = modalBirthDate.value;
-      node.data({ firstName: fn, lastName: ln, birthDate: bd, label: buildLabel(fn, ln, bd) });
+      const fullName = modalFullName.value.trim();
+      const firstName = modalFirstName.value.trim();
+      const lastName = modalLastName.value.trim();
+      const birthDate = modalBirthDate.value;
+      
+      node.data({ 
+        fullName,
+        firstName, 
+        lastName, 
+        birthDate, 
+        label: buildLabel(fullName, firstName, lastName) 
+      });
       requestAnimationFrame(() => updateBadgePosition(node));
       closeModal();
     });
