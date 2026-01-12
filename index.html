@@ -238,7 +238,6 @@
 
     <hr style="width: 100%; border: 0; border-top: 1px solid var(--border-color); margin: 8px 0;" />
     
-    <button id="autoLayout" class="secondary">Re-Align Tree</button>
     <button id="disconnectNodes" class="secondary" disabled>Remove Item</button>
     <button id="toggleTheme" class="secondary">Toggle Theme</button>
     <div style="display: flex; gap: 8px;">
@@ -253,7 +252,7 @@
       1. Click to select items (no CTRL needed).<br />
       2. <strong>Marriage:</strong> Select two people, click Marriage.<br />
       3. <strong>Child:</strong> Select the <strong>Union Dot</strong> then the <strong>Child</strong>, click Child.<br />
-      4. <strong>Re-Align:</strong> Automatically organizes marriages side-by-side with children below.
+      4. <strong>Navigation:</strong> Drag the background to pan, scroll to zoom.
     </div>
   </div>
   <div id="cy"></div>
@@ -448,7 +447,6 @@
     const childBtn = document.getElementById('btnChild');
     const disconnectBtn = document.getElementById('disconnectNodes');
     const toggleThemeBtn = document.getElementById('toggleTheme');
-    const autoLayoutBtn = document.getElementById('autoLayout');
     const searchToggleBtn = document.getElementById('searchToggleBtn');
     const searchWrapper = document.getElementById('searchWrapper');
     const searchBar = document.getElementById('searchBar');
@@ -503,6 +501,11 @@
         return;
       }
       
+      // Calculate current viewport center in model coordinates
+      const extent = cy.extent();
+      const centerX = (extent.x1 + extent.x2) / 2;
+      const centerY = (extent.y1 + extent.y2) / 2;
+      
       const uniqueId = 'p_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
       const newPerson = cy.add({
         group: 'nodes',
@@ -517,7 +520,7 @@
           isDeceased: false, 
           photo: '' 
         },
-        position: { x: 100 + Math.random() * 50, y: 100 + Math.random() * 50 }
+        position: { x: centerX, y: centerY }
       });
       
       createBadge(newPerson);
@@ -585,37 +588,6 @@
       cy.elements().unselect();
       selectionOrder = [];
       updateActionButtons();
-    });
-
-    autoLayoutBtn.addEventListener('click', () => {
-        const H_GAP = 220; const V_GAP = 350; 
-        const depthMap = new Map();
-        const personNodes = cy.nodes('[type="person"]');
-        if (personNodes.length === 0) return;
-        personNodes.forEach(n => depthMap.set(n.id(), 0));
-        let changed = true;
-        while (changed) {
-            changed = false;
-            personNodes.forEach(node => {
-                const nodeId = node.id(); const currentDepth = depthMap.get(nodeId);
-                node.incomers('edge[relType="parent-child"]').forEach(e => {
-                    const partners = e.source().neighborhood('node[type="person"]');
-                    partners.forEach(p => { if (depthMap.get(p.id()) + 1 > currentDepth) { depthMap.set(nodeId, depthMap.get(p.id()) + 1); changed = true; } });
-                });
-            });
-        }
-        const levels = {};
-        personNodes.forEach(n => { const d = depthMap.get(n.id()); if (!levels[d]) levels[d] = []; levels[d].push(n); });
-        Object.keys(levels).forEach(level => {
-            const y = 100 + (parseInt(level) * V_GAP);
-            levels[level].forEach((node, idx) => { node.position({ x: idx * H_GAP, y }); });
-        });
-        cy.nodes('[type="union"]').forEach(u => {
-            const partners = u.neighborhood('node[type="person"]');
-            if (partners.length > 0) u.position({ x: partners.reduce((sum, p) => sum + p.position().x, 0) / partners.length, y: partners[0].position().y + 100 });
-        });
-        cy.nodes('[type="person"]').forEach(n => updateBadgePosition(n));
-        cy.fit(null, 50);
     });
 
     disconnectBtn.addEventListener('click', () => {
@@ -698,7 +670,7 @@
             // Then add edges
             cy.add(json.edges.map(e => ({ group: 'edges', data: e.data })));
             
-            // Ensure badges are recreated and correctly positioned
+            // Recreate UI elements for imported nodes
             cy.nodes('[type="person"]').forEach(n => createBadge(n));
             
             updateActionButtons();
