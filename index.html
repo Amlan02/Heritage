@@ -280,13 +280,19 @@
             'z-index': 1
           }
         },
-        // Group all background-related properties here to avoid parsing empty values
+        // Refined selector to prevent parsing errors on empty data(photo) strings
         {
-          selector: 'node[photo][photo != ""]',
+          selector: 'node[photo]',
           style: {
-            'background-image': 'data(photo)',
+            'background-image': function(node) {
+              const p = node.data('photo');
+              return (p && p.length > 0) ? p : 'none';
+            },
             'background-fit': 'cover',
-            'background-image-opacity': 1,
+            'background-image-opacity': function(node) {
+              const p = node.data('photo');
+              return (p && p.length > 0) ? 1 : 0;
+            },
             'background-clip': 'node'
           }
         },
