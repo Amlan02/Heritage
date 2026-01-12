@@ -56,12 +56,6 @@
     }
     #sidebar h2 { margin: 0; font-size: 18px; }
     
-    .search-container {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      transition: all 0.2s ease-in-out;
-    }
     #searchToggleBtn {
       background: transparent;
       border: 1px solid var(--border-color);
@@ -72,6 +66,7 @@
       align-items: center;
       justify-content: center;
       border-radius: 6px;
+      color: var(--text-color);
     }
     #searchToggleBtn:hover {
       background: rgba(255,255,255,0.05);
@@ -216,7 +211,7 @@
       <button id="searchToggleBtn" title="Search Ancestors">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <line x1="21" x1="21" x2="16.65" y2="16.65"></line>
         </svg>
       </button>
     </div>
@@ -291,8 +286,9 @@
 
   <script>
     'use strict';
-    let activeNodeId = null; 
     let selectionOrder = []; 
+    let activeNodeId = null;
+
     const cy = cytoscape({
       container: document.getElementById('cy'),
       selectionType: 'additive', 
@@ -410,9 +406,7 @@
       const badge = cy.getElementById(personNode.id() + '_badge');
       if (badge.empty()) return;
       const pos = personNode.position();
-      const w = personNode.width();
-      const h = personNode.height();
-      badge.position({ x: pos.x + (w / 2), y: pos.y - (h / 2) });
+      badge.position({ x: pos.x + 50, y: pos.y - 60 });
     }
 
     function buildLabel(first, ln, birth, death) {
@@ -477,7 +471,6 @@
       const selectedNodes = cy.nodes(':selected');
       const selectedEdges = cy.edges(':selected');
       const count = selectedNodes.length;
-      
       marriageBtn.disabled = count !== 2;
       childBtn.disabled = count !== 2;
       disconnectBtn.disabled = count === 0 && selectedEdges.length === 0;
@@ -486,15 +479,10 @@
     cy.on('select unselect', 'node, edge', updateActionButtons);
 
     searchToggleBtn.addEventListener('click', () => {
-        const isVisible = searchWrapper.style.display === 'block';
+        const isVisible = window.getComputedStyle(searchWrapper).display === 'block';
         searchWrapper.style.display = isVisible ? 'none' : 'block';
-        if (!isVisible) {
-            searchBar.focus();
-        } else {
-            // Clear highlights when closing search
-            searchBar.value = '';
-            cy.nodes().removeClass('highlight');
-        }
+        if (!isVisible) searchBar.focus();
+        else { searchBar.value = ''; cy.nodes().removeClass('highlight'); }
     });
 
     searchBar.addEventListener('input', (e) => {
@@ -505,21 +493,39 @@
       });
     });
 
-    addNodeBtn.addEventListener('click', () => {
+    function handleAddNode() {
       const f = document.getElementById('firstName');
       const l = document.getElementById('lastName');
       const b = document.getElementById('birthDate');
-      if (!f.value.trim() && !l.value.trim()) return;
-      const id = 'n' + Date.now();
-      const person = cy.add({
+      
+      if (!f.value.trim() && !l.value.trim()) {
+        showLogicError("Identity required. Enter names.");
+        return;
+      }
+      
+      const uniqueId = 'p_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+      const newPerson = cy.add({
         group: 'nodes',
-        data: { id, type: 'person', label: buildLabel(f.value, l.value, b.value, ''), firstName: f.value, lastName: l.value, birthDate: b.value, deathDate: '', isDeceased: false, photo: '' },
-        position: { x: 100 + Math.random() * 100, y: 100 + Math.random() * 100 }
+        data: { 
+          id: uniqueId, 
+          type: 'person', 
+          label: buildLabel(f.value, l.value, b.value, ''), 
+          firstName: f.value, 
+          lastName: l.value, 
+          birthDate: b.value, 
+          deathDate: '', 
+          isDeceased: false, 
+          photo: '' 
+        },
+        position: { x: 100 + Math.random() * 50, y: 100 + Math.random() * 50 }
       });
-      createBadge(person);
+      
+      createBadge(newPerson);
       f.value = ''; l.value = ''; b.value = '';
       updateActionButtons();
-    });
+    }
+
+    addNodeBtn.addEventListener('click', handleAddNode);
 
     marriageBtn.addEventListener('click', () => {
       if (selectionOrder.length < 2) return;
@@ -531,12 +537,6 @@
           return;
       }
 
-      const existingPartnerLink = s.neighborhood('node[type="union"]').filter(u => u.neighborhood('node[id="' + t.id() + '"]').nonempty());
-      if (existingPartnerLink.nonempty()) { 
-          showLogicError("Marriage already exists."); 
-          return; 
-      }
-
       const unionId = `u_${s.id()}_${t.id()}`;
       const midX = (s.position().x + t.position().x) / 2;
       const midY = (s.position().y + t.position().y) / 2;
@@ -545,7 +545,6 @@
         { group: 'edges', data: { id: `e_${s.id()}_u`, source: s.id(), target: unionId, relType: 'partner' } },
         { group: 'edges', data: { id: `e_${t.id()}_u`, source: t.id(), target: unionId, relType: 'partner' } }
       ]);
-      
       cy.elements().unselect();
       selectionOrder = [];
       updateActionButtons();
@@ -553,160 +552,79 @@
 
     childBtn.addEventListener('click', () => {
       if (selectionOrder.length < 2) return;
-      
       const s = selectionOrder[selectionOrder.length - 2];
       const t = selectionOrder[selectionOrder.length - 1];
-
       if (!s || !t) return;
-
+      
       let parentSourceId = null;
       let childTargetId = null;
-
-      if (t.data('type') !== 'person') {
-        showLogicError("Second selection must be the child.");
-        return;
-      }
+      if (t.data('type') !== 'person') { showLogicError("Second selection must be the child."); return; }
       childTargetId = t.id();
-
+      
       if (s.data('type') === 'union') {
           parentSourceId = s.id();
       } else if (s.data('type') === 'person') {
           const unionsOfS = s.neighborhood('node[type="union"]');
-          if (unionsOfS.length > 1) {
-              showLogicError("Multiple unions. Select the specific Pink Dot and the child.");
-              return;
-          } else if (unionsOfS.length === 1) {
+          if (unionsOfS.length > 0) {
               parentSourceId = unionsOfS.first().id();
           } else {
               const unionId = `u_single_${s.id()}_${Date.now()}`;
-              const pos = s.position();
               cy.add([
-                  { group: 'nodes', data: { id: unionId, type: 'union' }, position: { x: pos.x, y: pos.y + 80 } },
+                  { group: 'nodes', data: { id: unionId, type: 'union' }, position: { x: s.position().x, y: s.position().y + 80 } },
                   { group: 'edges', data: { id: `e_${s.id()}_${unionId}`, source: s.id(), target: unionId, relType: 'partner' } }
               ]);
               parentSourceId = unionId;
           }
       }
-
-      const alreadyExists = cy.edges(`edge[source="${parentSourceId}"][target="${childTargetId}"]`).nonempty();
-      if (alreadyExists) { 
-        showLogicError("Child connection already exists."); 
-        return; 
-      }
       
-      cy.add({ group: 'edges', data: { id: 'e' + Date.now(), source: parentSourceId, target: childTargetId, relType: 'parent-child' } });
-      
+      if (!parentSourceId) return;
+      cy.add({ 
+        group: 'edges', 
+        data: { id: 'ec_' + Date.now(), source: parentSourceId, target: childTargetId, relType: 'parent-child' } 
+      });
       cy.elements().unselect();
       selectionOrder = [];
       updateActionButtons();
     });
 
     autoLayoutBtn.addEventListener('click', () => {
-        const H_GAP = 220; 
-        const V_GAP = 350; 
+        const H_GAP = 220; const V_GAP = 350; 
         const depthMap = new Map();
         const personNodes = cy.nodes('[type="person"]');
         if (personNodes.length === 0) return;
         personNodes.forEach(n => depthMap.set(n.id(), 0));
         let changed = true;
-        let iterations = 0;
-        const maxIterations = personNodes.length * 5; 
-        while (changed && iterations < maxIterations) {
+        while (changed) {
             changed = false;
-            iterations++;
             personNodes.forEach(node => {
-                const nodeId = node.id();
-                const currentDepth = depthMap.get(nodeId);
-                const parentEdges = node.incomers('edge[relType="parent-child"]');
-                parentEdges.forEach(e => {
-                    const union = e.source();
-                    const partners = union.neighborhood('node[type="person"]').filter(p => union.edgesWith(p).some(edge => edge.data('relType') === 'partner'));
-                    partners.forEach(p => {
-                        const pDepth = depthMap.get(p.id());
-                        if (pDepth + 1 > currentDepth) {
-                            depthMap.set(nodeId, pDepth + 1);
-                            changed = true;
-                        }
-                    });
-                });
-                const unions = node.neighborhood('node[type="union"]');
-                unions.forEach(u => {
-                    const partners = u.neighborhood('node[type="person"]').filter(p => u.edgesWith(p).some(edge => edge.data('relType') === 'partner'));
-                    partners.forEach(p => {
-                        const pDepth = depthMap.get(p.id());
-                        const nDepth = depthMap.get(nodeId);
-                        if (pDepth !== nDepth) {
-                            const target = Math.max(pDepth, nDepth);
-                            depthMap.set(nodeId, target);
-                            depthMap.set(p.id(), target);
-                            changed = true;
-                        }
-                    });
+                const nodeId = node.id(); const currentDepth = depthMap.get(nodeId);
+                node.incomers('edge[relType="parent-child"]').forEach(e => {
+                    const partners = e.source().neighborhood('node[type="person"]');
+                    partners.forEach(p => { if (depthMap.get(p.id()) + 1 > currentDepth) { depthMap.set(nodeId, depthMap.get(p.id()) + 1); changed = true; } });
                 });
             });
         }
         const levels = {};
-        personNodes.forEach(n => {
-            const d = depthMap.get(n.id());
-            if (!levels[d]) levels[d] = [];
-            levels[d].push(n);
-        });
-        Object.keys(levels).sort((a,b) => a-b).forEach(level => {
-            const levelNodes = levels[level];
+        personNodes.forEach(n => { const d = depthMap.get(n.id()); if (!levels[d]) levels[d] = []; levels[d].push(n); });
+        Object.keys(levels).forEach(level => {
             const y = 100 + (parseInt(level) * V_GAP);
-            levelNodes.sort((a, b) => {
-                const parentAEdge = a.incomers('edge[relType="parent-child"]').first();
-                const parentBEdge = b.incomers('edge[relType="parent-child"]').first();
-                const posA = (parentAEdge.nonempty()) ? parentAEdge.source().position().x : (a.position().x || 0);
-                const posB = (parentBEdge.nonempty()) ? parentBEdge.source().position().x : (b.position().x || 0);
-                return posA - posB;
-            });
-            levelNodes.forEach((node, idx) => {
-                const x = idx * H_GAP;
-                node.position({ x, y });
-            });
+            levels[level].forEach((node, idx) => { node.position({ x: idx * H_GAP, y }); });
         });
         cy.nodes('[type="union"]').forEach(u => {
-            const partners = u.neighborhood('node[type="person"]').filter(p => u.edgesWith(p).some(e => e.data('relType') === 'partner'));
-            if (partners.length === 2) {
-                const p1 = partners[0].position();
-                const p2 = partners[1].position();
-                u.position({ x: (p1.x + p2.x) / 2, y: p1.y + 100 });
-            } else if (partners.length === 1) {
-                const p1 = partners[0].position();
-                u.position({ x: p1.x, y: p1.y + 100 });
-            }
+            const partners = u.neighborhood('node[type="person"]');
+            if (partners.length > 0) u.position({ x: partners.reduce((sum, p) => sum + p.position().x, 0) / partners.length, y: partners[0].position().y + 100 });
         });
         cy.nodes('[type="person"]').forEach(n => updateBadgePosition(n));
         cy.fit(null, 50);
     });
 
     disconnectBtn.addEventListener('click', () => {
-      const selectedEdges = cy.edges(':selected');
-      const selectedNodes = cy.nodes(':selected');
-      if (selectedEdges.nonempty()) selectedEdges.remove();
-      if (selectedNodes.nonempty()) {
-          selectedNodes.connectedEdges().remove();
-          selectedNodes.forEach(n => {
-              if (n.data('type') === 'person') {
-                  const badge = cy.getElementById(n.id() + '_badge');
-                  if (!badge.empty()) badge.remove();
-              }
-              n.remove();
-          });
-      }
+      cy.elements(':selected').remove();
       cy.nodes('node[type="union"]').forEach(u => { if (u.degree() === 0) u.remove(); });
       updateActionButtons();
     });
 
-    clearBoardBtn.addEventListener('click', () => {
-      if (confirm("Delete all data? This cannot be undone.")) { 
-        cy.elements().remove(); 
-        selectionOrder = []; 
-        updateActionButtons(); 
-      }
-    });
-
+    clearBoardBtn.addEventListener('click', () => { if (confirm("Delete all data?")) { cy.elements().remove(); selectionOrder = []; updateActionButtons(); } });
     toggleThemeBtn.addEventListener('click', () => document.body.classList.toggle('light'));
 
     cy.on('tap', 'node[type="badge"]', (evt) => {
@@ -727,15 +645,20 @@
 
     document.getElementById('modalCloseX').addEventListener('click', () => modalBackdrop.style.display = 'none');
     closeModalBtn.addEventListener('click', () => modalBackdrop.style.display = 'none');
+    
     saveCharacterBtn.addEventListener('click', () => {
       const node = cy.getElementById(activeNodeId);
-      const b = modalBirthDate.value;
-      const d = modalDeathDate.value;
+      const b = modalBirthDate.value; const d = modalDeathDate.value;
       if (b && d && new Date(d) < new Date(b)) { validationError.style.display = 'block'; return; }
-      node.data({ firstName: modalFirstName.value, lastName: modalLastName.value, birthDate: b, deathDate: d, isDeceased: !!d, label: buildLabel(modalFirstName.value, modalLastName.value, b, d) });
+      node.data({ 
+        firstName: modalFirstName.value, lastName: modalLastName.value, 
+        birthDate: b, deathDate: d, isDeceased: !!d, 
+        label: buildLabel(modalFirstName.value, modalLastName.value, b, d) 
+      });
       updateBadgePosition(node);
       modalBackdrop.style.display = 'none';
     });
+
     document.getElementById('addPhotoBtn').addEventListener('click', () => photoInput.click());
     photoInput.addEventListener('change', () => {
       const file = photoInput.files[0];
@@ -744,12 +667,11 @@
       r.onload = () => { photoPreview.src = r.result; cy.getElementById(activeNodeId).data('photo', r.result); };
       r.readAsDataURL(file);
     });
+
     deleteNodeBtn.addEventListener('click', () => {
       const node = cy.getElementById(activeNodeId);
       const badge = cy.getElementById(activeNodeId + '_badge');
-      const neighborUnions = node.neighborhood('node[type="union"]');
       node.remove(); if (!badge.empty()) badge.remove();
-      neighborUnions.forEach(u => { if (u.degree() === 0) u.remove(); });
       modalBackdrop.style.display = 'none';
       updateActionButtons();
     });
@@ -771,16 +693,17 @@
             cy.elements().remove();
             selectionOrder = []; 
             
+            // Add nodes first
             cy.add(json.nodes.map(n => ({ group: 'nodes', data: n.data, position: n.position })));
+            // Then add edges
             cy.add(json.edges.map(e => ({ group: 'edges', data: e.data })));
             
+            // Ensure badges are recreated and correctly positioned
             cy.nodes('[type="person"]').forEach(n => createBadge(n));
             
             updateActionButtons();
             cy.fit(null, 50);
-        } catch (err) {
-            showLogicError("Import failed: Invalid file format.");
-        }
+        } catch (err) { showLogicError("Import failed. Data corrupt."); }
         importTreeInput.value = ''; 
       };
       r.readAsText(file);
@@ -788,19 +711,10 @@
 
     cy.on('select', 'node', (evt) => {
       const target = evt.target;
-      if (!selectionOrder.find(n => n.id() === target.id())) {
-        selectionOrder.push(target);
-      }
-      if (selectionOrder.length > 2) {
-        const first = selectionOrder.shift();
-        first.unselect();
-      }
+      if (!selectionOrder.find(n => n.id() === target.id())) selectionOrder.push(target);
+      if (selectionOrder.length > 2) { const first = selectionOrder.shift(); first.unselect(); }
     });
-
-    cy.on('unselect', 'node', (evt) => {
-      selectionOrder = selectionOrder.filter(n => n.id() !== evt.target.id());
-    });
-
+    cy.on('unselect', 'node', (evt) => { selectionOrder = selectionOrder.filter(n => n.id() !== evt.target.id()); });
     window.addEventListener('resize', () => cy.resize());
   </script>
 </body>
