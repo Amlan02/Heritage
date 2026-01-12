@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Heritage – Family Tree Builder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Lightweight graph library -->
+  <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+
+    /* Default to Dark Mode */
+    :root {
+      --bg-color: #111827;
+      --sidebar-bg: #1f2933;
+      --text-color: #f3f4f6;
+      --border-color: #374151;
+      --input-bg: #111827;
+      --input-text: #e5e7eb;
+      --cy-bg: #030712;
+      --modal-bg: #1f2933;
+    }
+
+    body.light {
+      --bg-color: #f4f6f8;
+      --sidebar-bg: #ffffff;
+      --text-color: #111827;
+      --border-color: #dcdcdc;
+      --input-bg: #ffffff;
+      --input-text: #111827;
+      --cy-bg: #f9fafb;
+      --modal-bg: #ffffff;
+    }
+
+    body { 
+      margin: 0; 
+      display: flex; 
+      flex-direction: row; 
+      height: 100vh; 
+      overflow: hidden; 
+      background: var(--bg-color); 
+      color: var(--text-color);
+      transition: background 0.3s, color 0.3s;
+    }
+
+    #sidebar { 
+      width: 300px; 
+      padding: 16px; 
+      background: var(--sidebar-bg); 
+      border-right: 1px solid var(--border-color); 
+      display: flex; 
+      flex-direction: column; 
+      gap: 12px; 
+      z-index: 10; 
+      overflow-y: auto;
+    }
+
+    #sidebar h2 { margin: 0 0 8px 0; font-size: 18px; }
+
+    label { font-size: 13px; opacity: 0.8; }
+    input { 
+      padding: 8px; 
+      font-size: 14px; 
+      border: 1px solid var(--border-color); 
+      border-radius: 4px; 
+      width: 100%; 
+      background: var(--input-bg);
+      color: var(--input-text);
+    }
+
+    button { 
+      padding: 12px; 
+      border: none; 
+      border-radius: 6px; 
+      background: #2563eb; 
+      color: white; 
+      font-size: 14px; 
+      cursor: pointer; 
+      transition: opacity 0.2s, background 0.2s; 
+      width: 100%;
+    }
+    button:hover { opacity: 0.9; }
+    button.secondary { background: #6b7280; }
+    button.danger { background: #ef4444; margin-top: 10px; }
+    button:disabled { background: #4b5563; cursor: not-allowed; opacity: 0.5; }
+
+    #instructions { font-size: 12px; opacity: 0.7; margin-top: auto; line-height: 1.4; padding-top: 20px; }
+    #cy { flex: 1; background: var(--cy-bg); position: relative; }
+
+    /* Modal Styling */
+    #modalBackdrop { 
+      position: fixed; 
+      inset: 0; 
+      background: rgba(0,0,0,0.75); 
+      display: none; 
+      align-items: center; 
+      justify-content: center; 
+      z-index: 1000; 
+      padding: 20px;
+    }
+    
+    #modal { 
+      background: var(--modal-bg); 
+      width: 500px; 
+      max-width: 100%; 
+      height: 80vh; 
+      border-radius: 12px; 
+      padding: 24px; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 12px; 
+      box-shadow: 0 20px 50px rgba(0,0,0,0.3); 
+      overflow-y: auto;
+      position: relative;
+    }
+
+    #modalCloseX {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: #ef4444;
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: bold;
+      border: none;
+      line-height: 1;
+      padding: 0;
+    }
+    
+    #photoContainer {
+      position: relative;
+      align-self: center;
+      width: 120px;
+      height: 120px;
+      margin-bottom: 10px;
+    }
+
+    #modal img { 
+      width: 100%; 
+      height: 100%; 
+      border-radius: 50%; 
+      object-fit: cover; 
+      background: #374151; 
+      border: 3px solid #2563eb;
+      display: block;
+    }
+
+    #addPhotoBtn {
+      position: absolute;
+      right: -5px;
+      bottom: 5px;
+      background: #2563eb;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--modal-bg);
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      #sidebar { 
+        width: 100%; 
+        height: auto; 
+        max-height: 40vh; 
+        border-right: none; 
+        border-bottom: 1px solid var(--border-color); 
+      }
+      #modal { width: 100%; height: 90vh; }
+    }
+  </style>
+</head>
+<body class="dark"> <!-- Defaulting to dark -->
+
+  <div id="sidebar">
+    <h2>Family Tree Builder</h2>
+
+    <label>First name</label>
+    <input id="firstName" placeholder="John" />
+
+    <label>Last name</label>
+    <input id="lastName" placeholder="Doe" />
+
+    <label>Birth date</label>
+    <input id="birthDate" type="date" />
+
+    <button id="addNode">Create Member</button>
+    <button id="connectNodes" class="secondary" disabled>Connect (Source → Target)</button>
+    <button id="disconnectNodes" class="secondary" disabled>Disconnect Selected</button>
+    <button id="toggleTheme" class="secondary">Toggle Light/Dark</button>
+    
+    <div style="display: flex; gap: 8px;">
+      <button id="saveTree" class="secondary">Export</button>
+      <button id="importTrigger" class="secondary" onclick="document.getElementById('importTree').click()">Import</button>
+    </div>
+    <input id="importTree" type="file" accept="application/json" style="display: none;" />
+
+    <div id="instructions">
+      <strong>Usage Protocol:</strong><br />
+      1. Click nodes to select.<br />
+      2. Selection sequence determines arrow direction.<br />
+      3. Use '+' badge to edit details.<br />
+      4. Drag nodes to reposition.
+    </div>
+  </div>
+
+  <div id="cy"></div>
+
+  <div id="modalBackdrop">
+    <div id="modal">
+      <button id="modalCloseX" title="Close">✕</button>
+      <h3 style="margin: 0; text-align: center;">Member Details</h3>
+      
+      <div id="photoContainer">
+        <img id="photoPreview" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" />
+        <button id="addPhotoBtn" title="Upload Photo">+</button>
+      </div>
+      <input id="photoInput" type="file" accept="image/*" style="display: none;" />
+
+      <label>First name</label>
+      <input id="modalFirstName" />
+
+      <label>Last name</label>
+      <input id="modalLastName" />
+
+      <label>Birth date</label>
+      <input id="modalBirthDate" type="date" />
+
+      <div style="flex-grow: 1;"></div>
+
+      <button id="saveCharacter">Save Changes</button>
+      <button id="closeModal" class="secondary">Cancel</button>
+      <button id="deleteNode" class="danger">Delete Member</button>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    let activeNodeId = null; 
+    let selectionList = [];
+
+    const cy = cytoscape({
+      container: document.getElementById('cy'),
+      style: [
+        {
+          selector: 'node[type="person"]',
+          style: {
+            'shape': 'round-rectangle',
+            'background-color': '#1f2933',
+            'border-width': 1,
+            'border-color': '#9ca3af',
+            'label': 'data(label)',
+            'text-wrap': 'wrap',
+            'text-max-width': '160px',
+            'text-valign': 'bottom',
+            'text-halign': 'center',
+            'text-margin-y': 8,
+            'color': '#f9fafb',
+            'padding': '10px',
+            'font-size': '15px', // Increased font-size for readability
+            'font-weight': 'bold',
+            'width': '100px',
+            'height': '120px',
+            'z-index': 1,
+            // Photo properties
+            'background-image': 'data(photo)',
+            'background-fit': 'cover',
+            'background-image-opacity': 1,
+            'background-clip': 'node'
+          }
+        },
+        {
+          selector: 'node[type="badge"]',
+          style: {
+            'shape': 'ellipse',
+            'width': 20,
+            'height': 20,
+            'background-color': '#2563eb',
+            'color': '#ffffff',
+            'font-size': '12px',
+            'font-weight': 'bold',
+            'label': '+',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'z-index': 2,
+            'border-width': 2,
+            'border-color': '#ffffff'
+          }
+        },
+        { 
+          selector: 'node[type="person"]:selected', 
+          style: { 
+            'border-width': 4, 
+            'border-color': '#3b82f6', 
+            'border-opacity': 1,
+            'background-color': '#374151' 
+          } 
+        },
+        { 
+          selector: 'edge', 
+          style: { 
+            'width': 2, 
+            'line-color': '#4b5563', 
+            'curve-style': 'bezier', 
+            'target-arrow-shape': 'triangle', 
+            'target-arrow-color': '#4b5563',
+            'arrow-scale': 1.2
+          } 
+        },
+        {
+          selector: 'edge:selected',
+          style: {
+            'line-color': '#3b82f6',
+            'target-arrow-color': '#3b82f6',
+            'width': 4
+          }
+        }
+      ],
+      layout: { name: 'preset' }, 
+      wheelSensitivity: 0.1
+    });
+
+    const addNodeBtn = document.getElementById('addNode');
+    const connectBtn = document.getElementById('connectNodes');
+    const disconnectBtn = document.getElementById('disconnectNodes');
+    const toggleThemeBtn = document.getElementById('toggleTheme');
+    const saveTreeBtn = document.getElementById('saveTree');
+    const importTreeInput = document.getElementById('importTree');
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalElement = document.getElementById('modal');
+    const modalFirstName = document.getElementById('modalFirstName');
+    const modalLastName = document.getElementById('modalLastName');
+    const modalBirthDate = document.getElementById('modalBirthDate');
+    const photoInput = document.getElementById('photoInput');
+    const addPhotoBtn = document.getElementById('addPhotoBtn');
+    const photoPreview = document.getElementById('photoPreview');
+    const saveCharacterBtn = document.getElementById('saveCharacter');
+    const closeModalBtn = document.getElementById('closeModal');
+    const modalCloseX = document.getElementById('modalCloseX');
+    const deleteNodeBtn = document.getElementById('deleteNode');
+
+    function buildLabel(fn, ln, bd) {
+      return `${fn} ${ln}${bd ? '\nb. ' + bd : ''}`;
+    }
+
+    function updateBadgePosition(personNode) {
+      const badge = cy.getElementById(personNode.id() + '_badge');
+      if (badge.empty()) return;
+      const pos = personNode.position();
+      const w = personNode.outerWidth();
+      const h = personNode.outerHeight();
+      badge.position({ x: pos.x + (w / 2), y: pos.y - (h / 2) });
+    }
+
+    function createBadge(personNode) {
+      const badgeId = personNode.id() + '_badge';
+      if(cy.getElementById(badgeId).nonempty()) cy.getElementById(badgeId).remove();
+      cy.add({
+        group: 'nodes',
+        data: { id: badgeId, type: 'badge', parentId: personNode.id() },
+        position: { x: 0, y: 0 },
+        grabbable: false,
+        selectable: false
+      });
+      requestAnimationFrame(() => updateBadgePosition(personNode));
+    }
+
+    function openModal(node) {
+      activeNodeId = node.id();
+      modalFirstName.value = node.data('firstName') || '';
+      modalLastName.value = node.data('lastName') || '';
+      modalBirthDate.value = node.data('birthDate') || '';
+      photoPreview.src = node.data('photo') || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+      
+      modalElement.scrollTop = 0;
+      modalBackdrop.style.display = 'flex';
+    }
+
+    function closeModal() {
+      modalBackdrop.style.display = 'none';
+      activeNodeId = null;
+      photoInput.value = '';
+    }
+
+    function updateActionButtons() {
+      const count = selectionList.length;
+      connectBtn.disabled = count !== 2;
+      disconnectBtn.disabled = count !== 2;
+    }
+
+    addNodeBtn.addEventListener('click', () => {
+      const firstName = document.getElementById('firstName').value.trim();
+      const lastName = document.getElementById('lastName').value.trim();
+      const birthDate = document.getElementById('birthDate').value;
+      if (!firstName || !lastName) return;
+      
+      const pan = cy.pan();
+      const zoom = cy.zoom();
+      const posX = ((cy.width() / 2) - pan.x) / zoom;
+      const posY = ((cy.height() / 2) - pan.y) / zoom;
+      
+      const id = 'n' + Date.now();
+      const label = buildLabel(firstName, lastName, birthDate);
+      const person = cy.add({
+        group: 'nodes',
+        data: { id, type: 'person', label, firstName, lastName, birthDate, photo: '' },
+        position: { x: posX, y: posY }
+      });
+      createBadge(person);
+    });
+
+    cy.on('position style', 'node[type="person"]', (evt) => updateBadgePosition(evt.target));
+
+    cy.on('select', 'node[type="person"]', (evt) => {
+      if (!selectionList.some(n => n.id() === evt.target.id())) selectionList.push(evt.target);
+      updateActionButtons();
+    });
+
+    cy.on('unselect', 'node[type="person"]', (evt) => {
+      selectionList = selectionList.filter(n => n.id() !== evt.target.id());
+      updateActionButtons();
+    });
+
+    connectBtn.addEventListener('click', () => {
+      if (selectionList.length !== 2) return;
+      const source = selectionList[0];
+      const target = selectionList[1];
+      if (!source.inside() || !target.inside()) {
+        cy.nodes().unselect();
+        return;
+      }
+      cy.add({ group: 'edges', data: { id: 'e' + Date.now(), source: source.id(), target: target.id() } });
+      cy.nodes().unselect();
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (selectionList.length !== 2) return;
+      const n1 = selectionList[0].id();
+      const n2 = selectionList[1].id();
+      cy.edges().filter(e => (e.source().id() === n1 && e.target().id() === n2) || (e.source().id() === n2 && e.target().id() === n1)).remove();
+      cy.nodes().unselect();
+    });
+
+    cy.on('tap', 'node[type="badge"]', (evt) => {
+      const parent = cy.getElementById(evt.target.data('parentId'));
+      if (parent.nonempty()) openModal(parent);
+    });
+
+    closeModalBtn.addEventListener('click', closeModal);
+    modalCloseX.addEventListener('click', closeModal);
+
+    addPhotoBtn.addEventListener('click', () => photoInput.click());
+
+    saveCharacterBtn.addEventListener('click', () => {
+      if (!activeNodeId) return;
+      const node = cy.getElementById(activeNodeId);
+      const fn = modalFirstName.value.trim();
+      const ln = modalLastName.value.trim();
+      const bd = modalBirthDate.value;
+      node.data({ firstName: fn, lastName: ln, birthDate: bd, label: buildLabel(fn, ln, bd) });
+      requestAnimationFrame(() => updateBadgePosition(node));
+      closeModal();
+    });
+
+    deleteNodeBtn.addEventListener('click', () => {
+      if (!activeNodeId) return;
+      cy.getElementById(activeNodeId + '_badge').remove();
+      cy.getElementById(activeNodeId).remove();
+      closeModal();
+    });
+
+    photoInput.addEventListener('change', () => {
+      if (!activeNodeId) return;
+      const file = photoInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => { 
+        photoPreview.src = reader.result; 
+        cy.getElementById(activeNodeId).data('photo', reader.result); 
+      };
+      reader.readAsDataURL(file);
+    });
+
+    toggleThemeBtn.addEventListener('click', () => {
+      document.body.classList.toggle('light');
+      const light = document.body.classList.contains('light');
+      cy.style()
+        .selector('node[type="person"]').style({ 
+          'background-color': light ? '#ffffff' : '#1f2933', 
+          'border-color': light ? '#374151' : '#9ca3af', 
+          'color': light ? '#111827' : '#f9fafb' 
+        })
+        .selector('edge').style({
+          'line-color': light ? '#9ca3af' : '#4b5563',
+          'target-arrow-color': light ? '#9ca3af' : '#4b5563'
+        })
+        .selector('node[type="person"]:selected').style({
+          'border-color': '#3b82f6' 
+        })
+        .update();
+    });
+
+    saveTreeBtn.addEventListener('click', () => {
+      const nodes = cy.nodes('[type="person"]').map(n => ({ data: n.data(), position: n.position() }));
+      const edges = cy.edges().map(e => ({ data: e.data() }));
+      const blob = new Blob([JSON.stringify({ nodes, edges }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'family-tree.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    importTreeInput.addEventListener('change', (event) => {
+      const file = event.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const json = JSON.parse(reader.result);
+          cy.elements().remove();
+          selectionList = [];
+          cy.add(json.nodes.map(n => ({ group: 'nodes', data: n.data, position: n.position })));
+          const validIds = new Set(cy.nodes().map(n => n.id()));
+          const validEdges = (json.edges || []).filter(e => validIds.has(e.data.source) && validIds.has(e.data.target));
+          cy.add(validEdges.map(e => ({ group: 'edges', data: e.data })));
+          cy.nodes('[type="person"]').forEach(node => createBadge(node));
+        } catch (err) { alert('Load error: ' + err.message); }
+        importTreeInput.value = '';
+      };
+      reader.readAsText(file);
+    });
+
+    window.addEventListener('resize', () => cy.resize());
+  </script>
+</body>
+</html>
