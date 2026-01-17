@@ -676,19 +676,44 @@
       let collection = cy.collection();
       if (visited.has(personNode.id())) return collection;
       visited.add(personNode.id());
+
+      // 1. Find all unions where this person is a child
       const parentEdges = personNode.connectedEdges('edge[target="' + personNode.id() + '"][relType="parent-child"]');
+      
       parentEdges.forEach(edge => {
         const unionNode = edge.source();
+        // Add the edge and the union node itself
         collection = collection.union(edge).union(unionNode);
+
+        // 2. Collect all siblings (other children of this same union)
+        const siblingEdges = unionNode.connectedEdges('edge[source="' + unionNode.id() + '"][relType="parent-child"]');
+        siblingEdges.forEach(sEdge => {
+          const siblingNode = sEdge.target();
+          if (siblingNode.id() !== personNode.id()) {
+            collection = collection.union(sEdge).union(siblingNode);
+            // Add sibling overlays
+            collection = collection.union(cy.getElementById(siblingNode.id() + '_badge'));
+            collection = collection.union(cy.getElementById(siblingNode.id() + '_branch'));
+          }
+        });
+
+        // 3. Collect all parents in this union and recurse upwards
         const partnerEdges = unionNode.connectedEdges('edge[relType="partner"]');
         partnerEdges.forEach(pEdge => {
           const parentPerson = pEdge.source();
-          collection = collection.union(pEdge).union(parentPerson).union(cy.getElementById(parentPerson.id() + '_badge')).union(cy.getElementById(parentPerson.id() + '_branch')).union(getBranchElements(parentPerson, visited));
+          collection = collection.union(pEdge).union(parentPerson);
+          // Add parent overlays
+          collection = collection.union(cy.getElementById(parentPerson.id() + '_badge'));
+          collection = collection.union(cy.getElementById(parentPerson.id() + '_branch'));
+          
+          // Recurse to find grandparents and their branches
+          collection = collection.union(getBranchElements(parentPerson, visited));
         });
       });
+
       return collection;
     }
-
+    
     cy.on('tap', 'node[type="branchButton"]', (evt) => {
       const btn = evt.target, personNode = cy.getElementById(btn.data('parentId'));
       if (personNode.empty()) return;
