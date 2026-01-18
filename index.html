@@ -6,877 +6,428 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
   <style>
-    * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
-    :root {
-      --bg-color: #111827;
-      --sidebar-bg: #1f2933;
-      --text-color: #f3f4f6;
-      --border-color: #374151;
-      --input-bg: #111827;
-      --input-text: #e5e7eb;
-      --cy-bg: #030712;
-      --modal-bg: #1f2933;
-      --grid-color: rgba(255, 255, 255, 0.05);
-    }
-    body.light {
-      --bg-color: #f4f6f8;
-      --sidebar-bg: #ffffff;
-      --text-color: #111827;
-      --border-color: #dcdcdc;
-      --input-bg: #ffffff;
-      --input-text: #111827;
-      --cy-bg: #f9fafb;
-      --modal-bg: #ffffff;
-      --grid-color: rgba(0, 0, 0, 0.05);
-    }
-    body { 
-      margin: 0; 
-      display: flex; 
-      flex-direction: row; 
-      height: 100vh; 
-      width: 100vw;
-      overflow: hidden; 
-      background: var(--bg-color); 
-      color: var(--text-color);
-      transition: background 0.3s, color 0.3s;
-    }
-    #sidebar { 
-      width: 220px; 
-      min-width: 220px;
-      padding: 16px; 
-      background: var(--sidebar-bg); 
-      border-right: 1px solid var(--border-color); 
-      display: flex; 
-      flex-direction: column; 
-      gap: 12px; 
-      z-index: 100; 
-      overflow-y: auto;
-      height: 100%;
-    }
-    #sidebarHeader {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    :root { --bg: #111827; --sb-bg: #1f2933; --txt: #f3f4f6; --brd: #374151; --inp-bg: #111827; --cy-bg: #030712; --mod-bg: #1f2933; --grid: rgba(255,255,255,0.05); }
+    body.light { --bg: #f4f6f8; --sb-bg: #fff; --txt: #111827; --brd: #dcdcdc; --inp-bg: #fff; --cy-bg: #f9fafb; --mod-bg: #fff; --grid: rgba(0,0,0,0.05); }
+    body { margin: 0; display: flex; height: 100vh; overflow: hidden; background: var(--bg); color: var(--txt); transition: background 0.3s; }
+    
+    /* Layout & Sidebar */
+    #sidebar { width: 220px; min-width: 220px; padding: 16px; background: var(--sb-bg); border-right: 1px solid var(--brd); display: flex; flex-direction: column; gap: 12px; z-index: 100; overflow-y: auto; }
+    .flex-row { display: flex; justify-content: space-between; align-items: center; }
     #sidebar h2 { margin: 0; font-size: 18px; }
     
-    #searchToggleBtn {
-      background: transparent;
-      border: 1px solid var(--border-color);
-      width: 36px;
-      height: 36px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 6px;
-      color: var(--text-color);
-    }
-    #searchToggleBtn:hover { background: rgba(255,255,255,0.05); }
+    /* Inputs & Buttons */
+    input, button { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--brd); background: var(--inp-bg); color: var(--txt); margin-bottom: 8px; font-size: 14px; }
+    button { border: none; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; transition: 0.2s; padding: 12px; }
+    button:hover { opacity: 0.9; } button:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-sec { background: #6b7280; } .btn-dan { background: #ef4444; }
+    #searchToggleBtn { width: 36px; height: 36px; padding: 0; background: transparent; display: flex; align-items: center; justify-content: center; }
     #searchWrapper { display: none; margin-top: 8px; }
+    label { font-size: 13px; opacity: 0.8; margin-bottom: 4px; display: block; }
+    hr { width: 100%; border: 0; border-top: 1px solid var(--brd); margin: 4px 0; }
 
-    label { font-size: 13px; opacity: 0.8; margin-bottom: 4px; display: block;}
-    input { 
-      padding: 8px; 
-      font-size: 14px; 
-      border: 1px solid var(--border-color); 
-      border-radius: 4px; 
-      width: 100%; 
-      background: var(--input-bg);
-      color: var(--input-text);
-      margin-bottom: 12px;
-    }
-    button { 
-      padding: 12px; 
-      border: none; 
-      border-radius: 6px; 
-      background: #2563eb; 
-      color: white; 
-      font-size: 14px; 
-      cursor: pointer; 
-      transition: opacity 0.2s, background 0.2s; 
-      width: 100%;
-      font-weight: 600;
-    }
-    button:hover { opacity: 0.9; }
-    button.secondary { background: #6b7280; }
-    button.danger { background: #ef4444; }
-    button:disabled { cursor: not-allowed; opacity: 0.3; }
-
-    #btnMarriage { background-color: #ec4899; color: white; }
-    #btnChild { background-color: #86efac; color: #064e3b; }
-    #btnAutoAlign { background-color: #8b5cf6; color: white; }
-
-    #instructions { font-size: 11px; opacity: 0.7; margin-top: auto; line-height: 1.4; padding-top: 20px; }
-    #cy { 
-      flex: 1; 
-      background: var(--cy-bg); 
-      position: relative; 
-      z-index: 1;
-      background-image: 
-        linear-gradient(var(--grid-color) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-      background-size: 20px 20px;
-    }
-    .modal-backdrop { 
-      position: fixed; 
-      inset: 0; 
-      background: rgba(0,0,0,0.85); 
-      display: none; 
-      align-items: center; 
-      justify-content: center; 
-      z-index: 2000; 
-      padding: 20px;
-    }
-    .modal-content { 
-      background: var(--modal-bg); 
-      width: 400px; 
-      max-width: 100%; 
-      border-radius: 12px; 
-      padding: 24px; 
-      display: flex; 
-      flex-direction: column; 
-      box-shadow: 0 20px 50px rgba(0,0,0,0.5); 
-      position: relative;
-    }
-    .close-x {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      background: #ef4444;
-      color: white;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-weight: bold;
-      border: none;
-      line-height: 1;
-      padding: 0;
-    }
-
-    #radialMenuContainer {
-      position: relative;
-      width: 400px;
-      height: 400px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .radial-btn {
-      position: absolute;
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: #374151;
-      border: 2px solid var(--border-color);
-      color: white;
-      font-size: 11px;
-      font-weight: bold;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      transition: transform 0.2s, background 0.2s;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    }
-    .rad-top:hover { transform: translateX(-50%) scale(1.1); background: #2563eb; border-color: #60a5fa; }
-    .rad-bottom:hover { transform: translateX(-50%) scale(1.1); background: #ec4899; border-color: #f472b6; }
-    .rad-left:hover { transform: translateY(-50%) scale(1.1); background: #10b981; border-color: #34d399; }
-    .rad-right:hover { transform: translateY(-50%) scale(1.1); background: #10b981; border-color: #34d399; }
-    .rad-partner:hover { transform: scale(1.1); background: #f59e0b; border-color: #fbbf24; }
-
-    .rad-top { top: 20px; left: 50%; transform: translateX(-50%); background: #8b5cf6; } 
-    .rad-right { top: 50%; right: 20px; transform: translateY(-50%); background: #10b981; } 
-    .rad-bottom { bottom: 20px; left: 50%; transform: translateX(-50%); background: #ec4899; } 
-    .rad-left { top: 50%; left: 20px; transform: translateY(-50%); background: #10b981; } 
-    .rad-partner { top: 30px; right: 30px; background: #f59e0b; } 
-
-    .rad-center { 
-      width: 100px; height: 100px; 
-      background: var(--sidebar-bg); 
-      border: 2px dashed var(--border-color);
-      display: flex; align-items: center; justify-content: center;
-      z-index: -1;
-      color: #9ca3af;
-    }
-
-    #photoContainer {
-      position: relative;
-      align-self: center;
-      width: 120px;
-      height: 120px;
-      margin-bottom: 10px;
-    }
-    #modal img { 
-      width: 100%; 
-      height: 100%; 
-      border-radius: 50%; 
-      object-fit: cover; 
-      background: #374151; 
-      border: 3px solid #2563eb;
-      display: block;
-    }
-    #addPhotoBtn {
-      position: absolute;
-      right: -5px;
-      bottom: 5px;
-      background: #2563eb;
-      color: white;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 2px solid var(--modal-bg);
-      cursor: pointer;
-      font-size: 20px;
-      font-weight: bold;
-    }
-    #validationError { color: #ef4444; font-size: 12px; display: none; text-align: center; }
+    /* Canvas & Modals */
+    #cy { flex: 1; background: var(--cy-bg) linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 20px 20px, linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 20px 20px; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 2000; }
+    .modal-content { background: var(--mod-bg); padding: 24px; border-radius: 12px; position: relative; width: 400px; max-width: 95%; box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+    .close-x { position: absolute; top: 12px; right: 12px; background: #ef4444; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 1; }
     
-    @media (max-width: 768px) {
-      body { flex-direction: column; }
-      #sidebar { width: 100%; min-width: 100%; height: auto; max-height: 50vh; border-right: none; border-bottom: 1px solid var(--border-color); }
-    }
+    /* Radial Menu */
+    #radialMenuContainer { position: relative; width: 400px; height: 400px; display: flex; align-items: center; justify-content: center; }
+    .radial-btn { position: absolute; width: 80px; height: 80px; border-radius: 50%; background: #374151; border: 2px solid var(--brd); font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .radial-btn:hover { transform: scale(1.1) translate(0); z-index: 10; }
+    .rad-top { top: 20px; left: 50%; transform: translateX(-50%); background: #8b5cf6; }
+    .rad-bottom { bottom: 20px; left: 50%; transform: translateX(-50%); background: #ec4899; }
+    .rad-left { top: 50%; left: 20px; transform: translateY(-50%); background: #10b981; }
+    .rad-right { top: 50%; right: 20px; transform: translateY(-50%); background: #10b981; }
+    .rad-partner { top: 30px; right: 30px; background: #f59e0b; }
+    .rad-center { width: 100px; height: 100px; border: 2px dashed var(--brd); display: flex; align-items: center; justify-content: center; color: #9ca3af; z-index: -1; border-radius: 50%; }
+
+    /* Photo */
+    #photoContainer { position: relative; align-self: center; width: 120px; height: 120px; margin-bottom: 10px; }
+    #photoContainer img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid #2563eb; background: #374151; }
+    #addPhotoBtn { position: absolute; right: 0; bottom: 0; width: 32px; height: 32px; border-radius: 50%; background: #2563eb; border: 2px solid var(--mod-bg); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+    @media (max-width: 768px) { body { flex-direction: column; } #sidebar { width: 100%; height: auto; max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--brd); } }
   </style>
 </head>
 <body class="dark">
   <div id="sidebar">
-    <div id="sidebarHeader">
+    <div class="flex-row">
       <h2>Heritage Tree</h2>
-      <button id="searchToggleBtn" title="Search Ancestors">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
-        </svg>
-      </button>
+      <button id="searchToggleBtn"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
     </div>
-    
-    <div id="searchWrapper">
-      <label>Find Ancestor</label>
-      <input id="searchBar" placeholder="Type a name..." />
+    <div id="searchWrapper"><input id="searchBar" placeholder="Find Ancestor..." /></div>
+    <hr />
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button id="btnMarriage" style="background:#ec4899" disabled>Link Marriage</button>
+      <button id="btnChild" style="background:#86efac; color:#064e3b" disabled>Link Child</button>
+      <button id="btnAutoAlign" style="background:#8b5cf6">Auto Align</button>
     </div>
-
-    <hr style="width: 100%; border: 0; border-top: 1px solid var(--border-color); margin: 8px 0;" />
-    
-    <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
-      <button id="btnMarriage" disabled>Legacy: Marriage</button>
-      <button id="btnChild" disabled>Legacy: Child</button>
-      <button id="btnAutoAlign">Automatic Re-align</button>
-    </div>
-
-    <hr style="width: 100%; border: 0; border-top: 1px solid var(--border-color); margin: 8px 0;" />
-    
-    <button id="disconnectNodes" class="secondary" disabled>Remove Item</button>
-    <button id="toggleTheme" class="secondary">Toggle Theme</button>
-    <div style="display: flex; gap: 8px;">
-      <button id="saveTree" class="secondary">Export</button>
-      <button id="importTrigger" class="secondary" onclick="document.getElementById('importTree').click()">Import</button>
-    </div>
-    <input id="importTree" type="file" accept="application/json" style="display: none;" />
-    <button id="clearBoard" class="danger" style="margin-top: 8px;">CLEAR BOARD</button>
-    
-    <div id="instructions">
-      <strong>INSTRUCTIONS:</strong><br />
-      1. <strong>Create Node:</strong> Right-click background.<br />
-      2. <strong>Add Relatives:</strong> Right-click existing node.<br />
-      3. <strong>Collapse:</strong> Click green branch dot.<br />
-    </div>
+    <hr />
+    <button id="disconnectNodes" class="btn-sec" disabled>Disconnect</button>
+    <button id="toggleTheme" class="btn-sec">Toggle Theme</button>
+    <div style="display:flex; gap:8px;"><button id="saveTree" class="btn-sec">Export</button><button onclick="$('importTree').click()" class="btn-sec">Import</button></div>
+    <input id="importTree" type="file" accept=".json" style="display:none" />
+    <button id="clearBoard" class="btn-dan" style="margin-top:auto">CLEAR BOARD</button>
+    <div id="instructions" style="font-size:11px; opacity:0.7; margin-top:10px">Right-click bg to create. Right-click node to add family.</div>
   </div>
-  <div id="cy"></div>
   
-  <div id="createModalBackdrop" class="modal-backdrop">
+  <div id="cy"></div>
+
+  <!-- Create Modal -->
+  <div id="createModal" class="modal-backdrop">
     <div class="modal-content">
-      <button class="close-x" id="closeCreateBtn">✕</button>
-      <h3 style="margin: 0 0 16px 0; text-align: center;">New Member</h3>
-      <label>First name</label>
-      <input id="newFirstName" placeholder="First" />
-      <label>Last name</label>
-      <input id="newLastName" placeholder="Last" />
-      <label>Birth date</label>
-      <input id="newBirthDate" type="date" />
-      <button id="confirmCreateNode">Create Member</button>
+      <button class="close-x" onclick="toggleModal('createModal',0)">✕</button>
+      <h3 style="text-align:center; margin-top:0">New Member</h3>
+      <input id="newFn" placeholder="First Name" /><input id="newLn" placeholder="Last Name" /><input id="newDob" type="date" />
+      <button id="confirmCreate">Create</button>
     </div>
   </div>
 
-  <div id="radialModalBackdrop" class="modal-backdrop" style="background: rgba(0,0,0,0.6);">
+  <!-- Radial Menu -->
+  <div id="radialModal" class="modal-backdrop" onclick="if(event.target===this) toggleModal('radialModal',0)">
     <div id="radialMenuContainer">
-        <button class="radial-btn rad-top" onclick="handleRadialAction('parent')">Add<br>Parent</button>
-        <button class="radial-btn rad-left" onclick="handleRadialAction('sibling-left')">Add<br>Sibling (L)</button>
-        <div class="rad-center">TARGET</div>
-        <button class="radial-btn rad-right" onclick="handleRadialAction('sibling-right')">Add<br>Sibling (R)</button>
-        <button class="radial-btn rad-bottom" onclick="handleRadialAction('child')">Add<br>Child</button>
-        <button class="radial-btn rad-partner" onclick="handleRadialAction('partner')">Add<br>Partner</button>
+      <button class="radial-btn rad-top" onclick="radialAct('parent')">Add<br>Parent</button>
+      <button class="radial-btn rad-left" onclick="radialAct('sibling-left')">Add<br>Sibling (L)</button>
+      <div class="rad-center">TARGET</div>
+      <button class="radial-btn rad-right" onclick="radialAct('sibling-right')">Add<br>Sibling (R)</button>
+      <button class="radial-btn rad-bottom" onclick="radialAct('child')">Add<br>Child</button>
+      <button class="radial-btn rad-partner" onclick="radialAct('partner')">Add<br>Partner</button>
     </div>
-    <div style="position: absolute; inset: 0; z-index: -1;" onclick="closeRadialModal()"></div>
   </div>
 
-  <div id="editModalBackdrop" class="modal-backdrop">
-    <div class="modal-content" style="width: 500px; height: 85vh;">
-      <button class="close-x" id="modalCloseX">✕</button>
-      <h3 style="margin: 0; text-align: center;">Member Details</h3>
+  <!-- Edit Modal -->
+  <div id="editModal" class="modal-backdrop">
+    <div class="modal-content" style="height: 85vh; width: 500px;">
+      <button class="close-x" onclick="toggleModal('editModal',0)">✕</button>
+      <h3 style="text-align:center; margin:0 0 10px 0">Edit Details</h3>
       <div id="photoContainer">
-        <img id="photoPreview" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" />
-        <button id="addPhotoBtn" title="Upload Photo">+</button>
+        <img id="photoPreview" src="" />
+        <div id="addPhotoBtn" onclick="$('photoInput').click()">+</div>
       </div>
-      <input id="photoInput" type="file" accept="image/*" style="display: none;" />
-      <label>First name</label>
-      <input id="modalFirstName" placeholder="First" />
-      <label>Last name</label>
-      <input id="modalLastName" placeholder="Last" />
-      <label>Birth date</label>
-      <input id="modalBirthDate" type="date" />
-      <label>Death date</label>
-      <input id="modalDeathDate" type="date" />
-      <div id="validationError">Chronological error: Death precedes birth.</div>
-      <div style="flex-grow: 1;"></div>
-      <button id="saveCharacter">Save Changes</button>
-      <button id="closeModal" class="secondary">Cancel</button>
-      <button id="deleteNode" class="danger">Delete Member</button>
+      <input id="photoInput" type="file" accept="image/*" style="display:none" />
+      <input id="editFn" placeholder="First" /><input id="editLn" placeholder="Last" />
+      <label>Birth</label><input id="editDob" type="date" />
+      <label>Death</label><input id="editDod" type="date" />
+      <div style="flex:1"></div>
+      <button id="saveEdit">Save</button>
+      <button class="btn-sec" onclick="toggleModal('editModal',0)">Cancel</button>
+      <button id="delNode" class="btn-dan">Delete</button>
     </div>
   </div>
 
   <script>
     'use strict';
-    let selectionOrder = []; 
-    let activeNodeId = null;
-    let contextCoordinates = { x: 0, y: 0 };
-    let contextTargetNodeId = null;
-    const GRID_SIZE = 20;
+    const $ = id => document.getElementById(id);
+    const toggleModal = (id, show) => $(id).style.display = show ? 'flex' : 'none';
+    const snap = p => ({ x: Math.round(p.x/20)*20, y: Math.round(p.y/20)*20 });
+    const uuid = (p='p') => p + '_' + Date.now() + Math.floor(Math.random()*1000);
+    const emptyImg = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
-    const cyElement = document.getElementById('cy');
-
-    cyElement.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-    }, false);
+    let selOrder = [], activeId = null, ctxPos = {x:0,y:0}, ctxNode = null;
 
     const cy = cytoscape({
-      container: cyElement,
-      selectionType: 'additive', 
+      container: $('cy'),
+      selectionType: 'additive',
+      wheelSensitivity: 0.1,
       style: [
-        {
-          selector: 'node[type="person"]',
-          style: {
-            'shape': 'round-rectangle',
-            'background-color': '#1f2933',
-            'border-width': 1,
-            'border-color': '#9ca3af',
-            'label': 'data(label)',
-            'text-wrap': 'wrap',
-            'text-max-width': 160,
-            'text-valign': 'bottom',
-            'text-halign': 'center',
-            'text-margin-y': 8,
-            'color': '#f9fafb',
-            'padding': 10,
-            'font-size': 14, 
-            'font-weight': 'bold',
-            'width': 100,
-            'height': 120,
-            'z-index': 10
-          }
-        },
-        {
-          selector: 'node[type="union"]',
-          style: {
-            'shape': 'ellipse',
-            'width': 14,
-            'height': 14,
-            'background-color': '#ec4899',
-            'z-index': 15,
-            'border-width': 2,
-            'border-color': '#ffffff'
-          }
-        },
-        {
-          selector: 'node[photo]',
-          style: {
-            'background-image': function(node) {
-              const p = node.data('photo');
-              return (p && p.length > 0) ? p : 'none';
-            },
-            'background-fit': 'cover',
-            'background-image-opacity': function(node) { return node.data('photo') ? 1 : 0; }
-          }
-        },
-        {
-          selector: 'node[isDeceased]',
-          style: { 'background-color': '#374151', 'border-style': 'double', 'border-width': 3, 'opacity': 0.8 }
-        },
-        {
-          selector: 'node[type="badge"]',
-          style: {
-            'shape': 'ellipse',
-            'width': 22,
-            'height': 22,
-            'background-color': '#2563eb',
-            'color': '#ffffff',
-            'label': '+',
-            'text-valign': 'center',
-            'text-halign': 'center',
-            'z-index': 20,
-            'border-width': 2,
-            'border-color': '#ffffff'
-          }
-        },
-        {
-          selector: 'node[type="branchButton"]',
-          style: {
-            'shape': 'ellipse',
-            'width': 22,
-            'height': 22,
-            'background-color': '#10b981',
-            'color': '#ffffff',
-            'label': '▼',
-            'text-valign': 'center',
-            'text-halign': 'center',
-            'z-index': 20,
-            'border-width': 2,
-            'border-color': '#ffffff'
-          }
-        },
-        {
-          selector: 'node.collapsed-btn',
-          style: { 'label': '▲', 'background-color': '#f59e0b' }
-        },
-        { 
-          selector: 'node[type="person"]:selected', 
-          style: { 'border-width': 4, 'border-color': '#3b82f6' } 
-        },
-        { 
-          selector: 'edge', 
-          style: { 
-            'width': 2, 
-            'line-color': '#4b5563', 
-            'curve-style': 'taxi', 
-            'taxi-direction': 'vertical',
-            'target-arrow-shape': 'triangle'
-          } 
-        },
-        {
-          selector: 'edge[relType="partner"]',
-          style: { 'target-arrow-shape': 'none', 'line-color': '#ec4899', 'width': 3, 'curve-style': 'straight' }
-        },
-        {
-          selector: 'edge:selected',
-          style: { 'line-color': '#3b82f6', 'width': 4 }
-        },
-        {
-          selector: '.hidden',
-          style: { 'display': 'none' }
-        }
-      ],
-      layout: { name: 'preset' }, 
-      wheelSensitivity: 0.1
+        { selector: 'node[type="person"]', style: { 'shape': 'round-rectangle', 'width': 100, 'height': 120, 'background-color': '#1f2933', 'border-width': 1, 'border-color': '#9ca3af', 'label': 'data(label)', 'text-wrap': 'wrap', 'text-valign': 'bottom', 'text-halign': 'center', 'text-margin-y': 8, 'color': '#f9fafb', 'padding': 10, 'font-size': 14, 'font-weight': 'bold' } },
+        { selector: 'node[photo]', style: { 'background-image': n => n.data('photo') || 'none', 'background-fit': 'cover', 'background-image-opacity': n => n.data('photo') ? 1 : 0 } },
+        { selector: 'node[isDeceased]', style: { 'background-color': '#374151', 'border-style': 'double', 'border-width': 3 } },
+        { selector: 'node[type="union"]', style: { 'shape': 'ellipse', 'width': 14, 'height': 14, 'background-color': '#ec4899', 'border-width': 2, 'border-color': '#fff' } },
+        { selector: '.overlay-btn', style: { 'shape': 'ellipse', 'width': 22, 'height': 22, 'color': '#fff', 'text-valign': 'center', 'text-halign': 'center', 'border-width': 2, 'border-color': '#fff' } },
+        { selector: 'node[type="badge"]', style: { 'background-color': '#2563eb', 'label': '+' } },
+        { selector: 'node[type="branchButton"]', style: { 'background-color': '#10b981', 'label': '▼' } },
+        { selector: 'node.collapsed-btn', style: { 'background-color': '#f59e0b', 'label': '▲' } },
+        { selector: ':selected', style: { 'border-width': 4, 'border-color': '#3b82f6', 'line-color': '#3b82f6' } },
+        { selector: 'edge', style: { 'width': 2, 'line-color': '#4b5563', 'curve-style': 'taxi', 'taxi-direction': 'vertical', 'target-arrow-shape': 'triangle' } },
+        { selector: 'edge[relType="partner"]', style: { 'target-arrow-shape': 'none', 'line-color': '#ec4899', 'width': 3, 'curve-style': 'straight' } },
+        { selector: '.hidden', style: { 'display': 'none' } }
+      ]
     });
 
-    function snapToGrid(pos) {
-      return {
-        x: Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
-        y: Math.round(pos.y / GRID_SIZE) * GRID_SIZE
-      };
+    // --- Node Logic ---
+    function buildLabel(f, l, b, d) {
+      const n = [f, l].filter(s=>s?.trim()).join(' ');
+      const y = d ? `${new Date(b).getFullYear()}–${new Date(d).getFullYear()}` : (b ? `${new Date(b).getFullYear()}–` : '');
+      return [n, y].filter(Boolean).join('\n');
     }
 
-    cy.on('cxttap', (evt) => {
-      const target = evt.target;
-      if (target === cy) {
-        contextCoordinates = snapToGrid(evt.position);
-        document.getElementById('newFirstName').value = '';
-        document.getElementById('newLastName').value = '';
-        document.getElementById('newBirthDate').value = '';
-        document.getElementById('createModalBackdrop').style.display = 'flex';
-      } else if (target.isNode() && target.data('type') === 'person') {
-        contextTargetNodeId = target.id();
-        contextCoordinates = target.position();
-        document.getElementById('radialModalBackdrop').style.display = 'flex';
+    function addPerson(data, pos) {
+      // Robustness: ensure data is an object
+      data = data || {};
+      const id = data.id || uuid();
+      const node = cy.add({ 
+        group: 'nodes', 
+        position: snap(pos || {x:0, y:0}),
+        data: { ...data, id, type: 'person', label: buildLabel(data.firstName, data.lastName, data.birthDate, data.deathDate), photo: data.photo || '' }
+      });
+      // Add Overlays
+      cy.add([
+        { group: 'nodes', classes: 'overlay-btn', data: { id: id+'_badge', type: 'badge', parentId: id }, position: { x: (pos?.x||0)+50, y: (pos?.y||0)-60 }, grabbable: false },
+        { group: 'nodes', classes: 'overlay-btn', data: { id: id+'_branch', type: 'branchButton', parentId: id }, position: { x: (pos?.x||0), y: (pos?.y||0)-60 }, grabbable: false }
+      ]);
+      return node;
+    }
+
+    function updateOverlays(node) {
+      const p = node.position();
+      cy.getElementById(node.id()+'_badge').position({ x: p.x+50, y: p.y-60 });
+      cy.getElementById(node.id()+'_branch').position({ x: p.x, y: p.y-60 });
+    }
+
+    // --- Interaction ---
+    cy.on('cxttap', e => {
+      if (e.target === cy) {
+        ctxPos = snap(e.position);
+        $('newFn').value = $('newLn').value = $('newDob').value = '';
+        toggleModal('createModal', 1);
+      } else if (e.target.data('type') === 'person') {
+        ctxNode = e.target;
+        toggleModal('radialModal', 1);
       }
     });
 
-    function closeCreateModal() { document.getElementById('createModalBackdrop').style.display = 'none'; }
-    function closeRadialModal() { document.getElementById('radialModalBackdrop').style.display = 'none'; }
-    function closeEditModal() { document.getElementById('editModalBackdrop').style.display = 'none'; }
-
-    document.getElementById('closeCreateBtn').onclick = closeCreateModal;
-
-    document.getElementById('confirmCreateNode').onclick = () => {
-      const f = document.getElementById('newFirstName').value;
-      const l = document.getElementById('newLastName').value;
-      const b = document.getElementById('newBirthDate').value;
-      if (!f.trim() && !l.trim()) { alert('Name required'); return; }
-      const id = 'p_' + Date.now();
-      const node = cy.add({
-        group: 'nodes',
-        data: { id, type: 'person', label: buildLabel(f, l, b, ''), firstName: f, lastName: l, birthDate: b, photo: '' },
-        position: contextCoordinates
-      });
-      createOverlays(node);
-      closeCreateModal();
+    $('confirmCreate').onclick = () => {
+      if (!$('newFn').value && !$('newLn').value) return alert('Name required');
+      addPerson({ firstName: $('newFn').value, lastName: $('newLn').value, birthDate: $('newDob').value }, ctxPos);
+      toggleModal('createModal', 0);
     };
 
-    window.handleRadialAction = (action) => {
-      const originNode = cy.getElementById(contextTargetNodeId);
-      if (originNode.empty()) return;
-      const originPos = originNode.position();
-      const newId = 'p_' + Date.now() + Math.floor(Math.random()*1000);
-      let newPos = { x: 0, y: 0 };
-      if (action === 'parent') newPos = snapToGrid({ x: originPos.x - 100, y: originPos.y - 300 });
-      else if (action === 'child') newPos = snapToGrid({ x: originPos.x, y: originPos.y + 300 });
-      else if (action === 'sibling-left') newPos = snapToGrid({ x: originPos.x - 220, y: originPos.y });
-      else if (action === 'sibling-right') newPos = snapToGrid({ x: originPos.x + 220, y: originPos.y });
-      else if (action === 'partner') newPos = snapToGrid({ x: originPos.x + 200, y: originPos.y });
-
-      const newNode = cy.add({
-        group: 'nodes',
-        data: { id: newId, type: 'person', label: 'New Member', firstName: 'New', lastName: 'Member', birthDate: '', photo: '' },
-        position: newPos
+    window.radialAct = (act) => {
+      if (!ctxNode) return;
+      const origin = ctxNode, oPos = origin.position();
+      const newPos = snap({ 
+        x: oPos.x + (act.includes('sibling') ? (act.includes('left')?-220:220) : (act==='partner'?200 : (act==='parent'?-100:0))),
+        y: oPos.y + (act === 'parent' ? -300 : (act === 'child' ? 300 : 0))
       });
-      createOverlays(newNode);
-
-      if (action === 'parent') {
-        const parentEdges = originNode.connectedEdges('edge[target="'+originNode.id()+'"][relType="parent-child"]');
-        if (parentEdges.length > 0) {
-          const unionId = parentEdges[0].source().id();
-          cy.add({ group: 'edges', data: { source: newNode.id(), target: unionId, relType: 'partner' } });
-        } else {
-          const unionId = 'u_' + Date.now();
-          const uPos = snapToGrid({ x: (originPos.x + newPos.x)/2, y: (originPos.y + newPos.y)/2 + 40 });
-          cy.add({ group: 'nodes', data: { id: unionId, type: 'union' }, position: uPos });
-          cy.add({ group: 'edges', data: { source: newNode.id(), target: unionId, relType: 'partner' } });
-          cy.add({ group: 'edges', data: { source: unionId, target: originNode.id(), relType: 'parent-child' } });
-        }
-      } else if (action === 'sibling-left' || action === 'sibling-right') {
-        const parentEdges = originNode.connectedEdges('edge[target="'+originNode.id()+'"][relType="parent-child"]');
-        if (parentEdges.length > 0) {
-          const unionId = parentEdges[0].source().id();
-          cy.add({ group: 'edges', data: { source: unionId, target: newNode.id(), relType: 'parent-child' } });
-        }
-      } else if (action === 'child') {
-        const partnerEdges = originNode.connectedEdges('edge[source="'+originNode.id()+'"][relType="partner"]');
-        let unionId;
-        if (partnerEdges.length > 0) unionId = partnerEdges[0].target().id();
-        else {
-          unionId = 'u_' + Date.now();
-          const uPos = snapToGrid({ x: originPos.x, y: originPos.y + 80 });
-          cy.add({ group: 'nodes', data: { id: unionId, type: 'union' }, position: uPos });
-          cy.add({ group: 'edges', data: { source: originNode.id(), target: unionId, relType: 'partner' } });
-        }
-        cy.add({ group: 'edges', data: { source: unionId, target: newNode.id(), relType: 'parent-child' } });
-      } else if (action === 'partner') {
-        const unionId = 'u_' + Date.now();
-        const uPos = snapToGrid({ x: (originPos.x + newPos.x)/2, y: originPos.y + 80 });
-        cy.add({ group: 'nodes', data: { id: unionId, type: 'union' }, position: uPos });
-        cy.add({ group: 'edges', data: { source: originNode.id(), target: unionId, relType: 'partner' } });
-        cy.add({ group: 'edges', data: { source: newNode.id(), target: unionId, relType: 'partner' } });
-      }
-      closeRadialModal();
-      setTimeout(() => openModal(newNode), 100);
-    };
-
-    function autoAlignTree() {
-      const personNodes = cy.nodes('[type="person"]');
-      if (personNodes.length === 0) return;
-      const HORIZONTAL_GAP = 220, VERTICAL_GAP = 300, PARTNER_OFFSET = 80;
-      const depths = new Map();
-      function computeDepth(node) {
-        if (depths.has(node.id())) return depths.get(node.id());
-        const unions = node.connectedEdges('edge[source="' + node.id() + '"][relType="partner"]').targets();
-        let maxChildDepth = -1;
-        unions.forEach(union => {
-          const children = union.connectedEdges('edge[source="' + union.id() + '"][relType="parent-child"]').targets();
-          children.forEach(child => { maxChildDepth = Math.max(maxChildDepth, computeDepth(child)); });
-        });
-        const depth = maxChildDepth + 1;
-        depths.set(node.id(), depth);
-        return depth;
-      }
-      personNodes.forEach(n => computeDepth(n));
-      const maxD = Math.max(...Array.from(depths.values()));
-      personNodes.forEach(n => depths.set(n.id(), maxD - depths.get(n.id())));
-      let currentX = 0;
-      const visited = new Set();
-      function layoutNode(node, gen) {
-        if (visited.has(node.id())) return;
-        visited.add(node.id());
-        const unions = node.connectedEdges('edge[source="' + node.id() + '"][relType="partner"]').targets();
-        if (unions.length === 0) {
-          node.position(snapToGrid({ x: currentX, y: gen * VERTICAL_GAP }));
-          currentX += HORIZONTAL_GAP;
-          return;
-        }
-        let childrenCount = 0, childrenXSum = 0;
-        unions.forEach(union => {
-          const children = union.connectedEdges('edge[source="' + union.id() + '"][relType="parent-child"]').targets();
-          const sortedChildren = children.toArray().sort((a, b) => {
-            const dateA = a.data('birthDate') ? new Date(a.data('birthDate')) : new Date(9999, 11, 31);
-            const dateB = b.data('birthDate') ? new Date(b.data('birthDate')) : new Date(9999, 11, 31);
-            return dateA - dateB;
-          });
-          sortedChildren.forEach(child => {
-            layoutNode(cy.getElementById(child.id()), gen + 1);
-            childrenXSum += child.position().x;
-            childrenCount++;
-          });
-        });
-        const midX = childrenCount > 0 ? (childrenXSum / childrenCount) : currentX;
-        if (childrenCount === 0) currentX += HORIZONTAL_GAP;
-        node.position(snapToGrid({ x: midX - PARTNER_OFFSET, y: gen * VERTICAL_GAP }));
-        unions.forEach(union => {
-          const partners = union.connectedEdges('edge[relType="partner"]').sources();
-          const partner = partners.filter(p => p.id() !== node.id()).first();
-          if (partner.nonempty()) {
-            visited.add(partner.id());
-            partner.position(snapToGrid({ x: midX + PARTNER_OFFSET, y: gen * VERTICAL_GAP }));
-          }
-          union.position(snapToGrid({ x: midX, y: gen * VERTICAL_GAP + 80 }));
-        });
-      }
-      const roots = personNodes.filter(n => n.connectedEdges('edge[target="' + n.id() + '"][relType="parent-child"]').length === 0);
-      roots.forEach(r => layoutNode(r, depths.get(r.id())));
-      cy.nodes('[type="person"]').forEach(n => updateOverlaysPosition(n));
-      cy.fit();
-    }
-    document.getElementById('btnAutoAlign').onclick = autoAlignTree;
-
-    function updateOverlaysPosition(personNode) {
-      const badge = cy.getElementById(personNode.id() + '_badge');
-      const branch = cy.getElementById(personNode.id() + '_branch');
-      const pos = personNode.position();
-      if (!badge.empty()) badge.position({ x: pos.x + 50, y: pos.y - 60 });
-      if (!branch.empty()) branch.position({ x: pos.x, y: pos.y - 60 });
-    }
-
-    function createOverlays(personNode) {
-      const badgeId = personNode.id() + '_badge', branchId = personNode.id() + '_branch';
-      if(cy.getElementById(badgeId).empty()) cy.add({ group: 'nodes', data: { id: badgeId, type: 'badge', parentId: personNode.id() }, grabbable: false, selectable: false });
-      if(cy.getElementById(branchId).empty()) cy.add({ group: 'nodes', data: { id: branchId, type: 'branchButton', parentId: personNode.id() }, grabbable: false, selectable: false });
-      updateOverlaysPosition(personNode);
-    }
-
-    function buildLabel(first, ln, birth, death) {
-      let lp = [];
-      const name = [first, ln].filter(x => x && x.trim()).join(' ').trim();
-      if (name) lp.push(name);
-      let lifespan = "";
-      if (birth) lifespan += new Date(birth).getFullYear();
-      if (death) lifespan += " – " + new Date(death).getFullYear();
-      else if (birth) lifespan += " – ";
-      if (lifespan) lp.push(lifespan);
-      return lp.join('\n');
-    }
-
-    // UPDATED: Now supports recursive and non-recursive (step-wise) retrieval
-    function getBranchElements(personNode, recursive = true, visited = new Set()) {
-      let collection = cy.collection();
-      if (visited.has(personNode.id())) return collection;
-      visited.add(personNode.id());
-
-      // 1. Find all unions where this person is a child
-      const parentEdges = personNode.connectedEdges('edge[target="' + personNode.id() + '"][relType="parent-child"]');
       
-      parentEdges.forEach(edge => {
-        const unionNode = edge.source();
-        // Add the edge and the union node itself
-        collection = collection.union(edge).union(unionNode);
+      const newNode = addPerson({ firstName: 'New', lastName: 'Member' }, newPos);
+      const addEdge = (s, t, r) => cy.add({ group: 'edges', data: { source: s, target: t, relType: r } });
+      const getUnion = (n, rel, dir) => n.connectedEdges(`edge[${dir}="${n.id()}"][relType="${rel}"]`).length > 0 ? n.connectedEdges(`edge[${dir}="${n.id()}"][relType="${rel}"]`)[0].source() : null;
 
-        // 2. Collect all siblings (other children of this same union)
-        const siblingEdges = unionNode.connectedEdges('edge[source="' + unionNode.id() + '"][relType="parent-child"]');
-        siblingEdges.forEach(sEdge => {
-          const siblingNode = sEdge.target();
-          if (siblingNode.id() !== personNode.id()) {
-            collection = collection.union(sEdge).union(siblingNode);
-            // Add sibling overlays
-            collection = collection.union(cy.getElementById(siblingNode.id() + '_badge'));
-            collection = collection.union(cy.getElementById(siblingNode.id() + '_branch'));
-          }
+      if (act === 'parent') {
+        let u = getUnion(origin, 'parent-child', 'target');
+        if (!u) {
+          u = cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: (oPos.x+newPos.x)/2, y: (oPos.y+newPos.y)/2+40}) });
+          addEdge(u.id(), origin.id(), 'parent-child');
+        }
+        addEdge(newNode.id(), u.id(), 'partner');
+      } else if (act.includes('sibling')) {
+        let u = getUnion(origin, 'parent-child', 'target');
+        if (u) addEdge(u.id(), newNode.id(), 'parent-child');
+      } else if (act === 'child') {
+        const pEdge = origin.connectedEdges('edge[relType="partner"]');
+        let u = pEdge.length ? pEdge[0].target() : cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: oPos.x, y: oPos.y+80}) });
+        if (!pEdge.length) addEdge(origin.id(), u.id(), 'partner');
+        addEdge(u.id(), newNode.id(), 'parent-child');
+      } else if (act === 'partner') {
+        const u = cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: (oPos.x+newPos.x)/2, y: oPos.y+80}) });
+        addEdge(origin.id(), u.id(), 'partner');
+        addEdge(newNode.id(), u.id(), 'partner');
+      }
+      toggleModal('radialModal', 0);
+      setTimeout(() => openEdit(newNode), 100);
+    };
+
+    // --- Branch Visibility ---
+    function getBranch(node, recursive, visited = new Set()) {
+      if (visited.has(node.id())) return cy.collection();
+      visited.add(node.id());
+      let set = cy.collection();
+      // Unions where node is child
+      node.connectedEdges('edge[target="'+node.id()+'"][relType="parent-child"]').forEach(e => {
+        const u = e.source();
+        set = set.add(e).add(u);
+        // Siblings
+        u.connectedEdges('edge[target!="'+node.id()+'"][relType="parent-child"]').forEach(se => {
+            set = set.add(se).add(se.target()).add(cy.getElementById(se.target().id()+'_badge')).add(cy.getElementById(se.target().id()+'_branch'));
         });
-
-        // 3. Collect all parents in this union and recurse upwards
-        const partnerEdges = unionNode.connectedEdges('edge[relType="partner"]');
-        partnerEdges.forEach(pEdge => {
-          const parentPerson = pEdge.source();
-          collection = collection.union(pEdge).union(parentPerson);
-          // Add parent overlays
-          collection = collection.union(cy.getElementById(parentPerson.id() + '_badge'));
-          const parentBranchBtn = cy.getElementById(parentPerson.id() + '_branch');
-          collection = collection.union(parentBranchBtn);
-          
-          // Recurse to find grandparents and their branches only if requested
-          if (recursive) {
-            collection = collection.union(getBranchElements(parentPerson, true, visited));
-          }
+        // Parents
+        u.connectedEdges('edge[relType="partner"]').forEach(pe => {
+            const p = pe.source();
+            set = set.add(pe).add(p).add(cy.getElementById(p.id()+'_badge')).add(cy.getElementById(p.id()+'_branch'));
+            if (recursive) set = set.add(getBranch(p, true, visited));
         });
       });
-
-      return collection;
+      return set;
     }
-    
-    // UPDATED: Toggle logic splits between step-wise show and recursive hide
-    cy.on('tap', 'node[type="branchButton"]', (evt) => {
-      const btn = evt.target, personNode = cy.getElementById(btn.data('parentId'));
-      if (personNode.empty()) return;
 
+    cy.on('tap', 'node[type="branchButton"]', e => {
+      const btn = e.target, p = cy.getElementById(btn.data('parentId'));
       if (btn.hasClass('collapsed-btn')) {
-        // SHOW: Non-recursive (Step-wise)
-        const branchItems = getBranchElements(personNode, false);
-        branchItems.removeClass('hidden'); 
-        btn.removeClass('collapsed-btn'); 
-      } else { 
-        // HIDE: Recursive (Hide all)
-        const branchItems = getBranchElements(personNode, true);
-        branchItems.addClass('hidden');
-        
-        // Also force upstream buttons to collapsed state so they look correct when revealed later
-        branchItems.filter('node[type="branchButton"]').addClass('collapsed-btn');
-        btn.addClass('collapsed-btn'); 
+        getBranch(p, false).removeClass('hidden'); // Step-wise show
+        btn.removeClass('collapsed-btn');
+      } else {
+        const branch = getBranch(p, true); // Recursive hide
+        branch.addClass('hidden');
+        branch.filter('node[type="branchButton"]').addClass('collapsed-btn');
+        btn.addClass('collapsed-btn');
       }
     });
 
-    cy.on('tap', 'node[type="badge"]', (evt) => {
-      const parent = cy.getElementById(evt.target.data('parentId'));
-      if (parent.nonempty()) openModal(parent);
-    });
+    // --- Auto Align ---
+    $('btnAutoAlign').onclick = () => {
+      const nodes = cy.nodes('[type="person"]');
+      if (!nodes.length) return;
+      const depths = new Map();
+      const getDepth = n => {
+        if (depths.has(n.id())) return depths.get(n.id());
+        let d = 0;
+        n.connectedEdges('edge[source="'+n.id()+'"][relType="partner"]').targets().forEach(u => {
+          u.connectedEdges('edge[relType="parent-child"]').targets().forEach(c => d = Math.max(d, getDepth(c)));
+        });
+        depths.set(n.id(), d + 1); return d + 1;
+      };
+      nodes.forEach(getDepth);
+      const maxD = Math.max(...depths.values());
+      nodes.forEach(n => depths.set(n.id(), maxD - depths.get(n.id()))); // Invert depth
 
-    cy.on('position', 'node[type="person"]', (evt) => updateOverlaysPosition(evt.target));
+      let curX = 0, vis = new Set();
+      const layout = (n, gen) => {
+        if (vis.has(n.id())) return;
+        vis.add(n.id());
+        const unions = n.connectedEdges('edge[source="'+n.id()+'"][relType="partner"]').targets();
+        if (!unions.length) { n.position(snap({x: curX, y: gen*300})); curX += 220; return; }
+        
+        let cxSum = 0, cCount = 0;
+        unions.forEach(u => {
+          u.connectedEdges('edge[relType="parent-child"]').targets().sort((a,b) => (new Date(a.data('birthDate')||'9999') - new Date(b.data('birthDate')||'9999'))).forEach(c => {
+            layout(c, gen + 1);
+            cxSum += c.position().x; cCount++;
+          });
+        });
 
-    document.getElementById('btnMarriage').onclick = () => {
-      if (selectionOrder.length < 2) return;
-      const s = selectionOrder[selectionOrder.length - 2], t = selectionOrder[selectionOrder.length - 1];
-      const uid = `u_${s.id()}_${t.id()}`;
-      cy.add([{ group: 'nodes', data: { id: uid, type: 'union' }, position: snapToGrid({ x: (s.position().x + t.position().x) / 2, y: (s.position().y + t.position().y) / 2 + 80 }) },
-              { group: 'edges', data: { source: s.id(), target: uid, relType: 'partner' } },
-              { group: 'edges', data: { source: t.id(), target: uid, relType: 'partner' } }]);
-      cy.elements().unselect(); selectionOrder = [];
+        const mid = cCount ? cxSum/cCount : curX;
+        if (!cCount) curX += 220;
+        n.position(snap({x: mid - 80, y: gen*300}));
+        
+        unions.forEach(u => {
+          const ptr = u.connectedEdges('edge[relType="partner"]').sources().filter(p => p.id() !== n.id()).first();
+          if (ptr.nonempty()) { vis.add(ptr.id()); ptr.position(snap({x: mid + 80, y: gen*300})); updateOverlays(ptr); }
+          u.position(snap({x: mid, y: gen*300 + 80}));
+        });
+        updateOverlays(n);
+      };
+      nodes.filter(n => !n.connectedEdges('edge[target="'+n.id()+'"][relType="parent-child"]').length).forEach(r => layout(r, depths.get(r.id())));
+      cy.fit();
     };
 
-    document.getElementById('btnChild').onclick = () => {
-      if (selectionOrder.length < 2) return;
-      const s = selectionOrder[selectionOrder.length - 2], t = selectionOrder[selectionOrder.length - 1];
-      if (t.data('type') !== 'person') return;
-      let pId = (s.data('type') === 'union') ? s.id() : s.neighborhood('node[type="union"]').first().id();
-      if (pId) cy.add({ group: 'edges', data: { source: pId, target: t.id(), relType: 'parent-child' } });
-      cy.elements().unselect(); selectionOrder = [];
-    };
-
-    document.getElementById('disconnectNodes').onclick = () => cy.elements(':selected').remove();
-    document.getElementById('toggleTheme').onclick = () => document.body.classList.toggle('light');
-    document.getElementById('clearBoard').onclick = () => { if(confirm("Clear board?")) cy.elements().remove(); };
-
-    function openModal(node) {
-      activeNodeId = node.id();
-      document.getElementById('modalFirstName').value = node.data('firstName') || '';
-      document.getElementById('modalLastName').value = node.data('lastName') || '';
-      document.getElementById('modalBirthDate').value = node.data('birthDate') || '';
-      document.getElementById('modalDeathDate').value = node.data('deathDate') || '';
-      document.getElementById('photoPreview').src = node.data('photo') || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
-      document.getElementById('editModalBackdrop').style.display = 'flex';
+    // --- Modal & Edit Logic ---
+    function openEdit(n) {
+      activeId = n.id();
+      $('editFn').value = n.data('firstName')||''; $('editLn').value = n.data('lastName')||'';
+      $('editDob').value = n.data('birthDate')||''; $('editDod').value = n.data('deathDate')||'';
+      $('photoPreview').src = n.data('photo') || emptyImg;
+      toggleModal('editModal', 1);
     }
 
-    document.getElementById('saveCharacter').onclick = () => {
-      const n = cy.getElementById(activeNodeId), f = document.getElementById('modalFirstName').value, l = document.getElementById('modalLastName').value, b = document.getElementById('modalBirthDate').value, d = document.getElementById('modalDeathDate').value;
-      n.data({ firstName: f, lastName: l, birthDate: b, deathDate: d, isDeceased: !!d, label: buildLabel(f, l, b, d) });
-      closeEditModal();
+    $('saveEdit').onclick = () => {
+      const d = { firstName: $('editFn').value, lastName: $('editLn').value, birthDate: $('editDob').value, deathDate: $('editDod').value };
+      cy.getElementById(activeId).data({ ...d, isDeceased: !!d.deathDate, label: buildLabel(d.firstName, d.lastName, d.birthDate, d.deathDate) });
+      toggleModal('editModal', 0);
     };
 
-    document.getElementById('deleteNode').onclick = () => {
-      const node = cy.getElementById(activeNodeId), badge = cy.getElementById(activeNodeId + '_badge'), branch = cy.getElementById(activeNodeId + '_branch');
-      if(node.nonempty()) node.remove();
-      if(badge.nonempty()) badge.remove();
-      if(branch.nonempty()) branch.remove();
-      closeEditModal();
+    $('delNode').onclick = () => {
+      cy.getElementById(activeId).remove();
+      cy.getElementById(activeId+'_badge').remove();
+      cy.getElementById(activeId+'_branch').remove();
+      toggleModal('editModal', 0);
     };
 
-    document.getElementById('addPhotoBtn').onclick = () => document.getElementById('photoInput').click();
-    document.getElementById('photoInput').onchange = (e) => {
+    $('photoInput').onchange = e => {
       const r = new FileReader();
-      r.onload = () => { document.getElementById('photoPreview').src = r.result; cy.getElementById(activeNodeId).data('photo', r.result); };
-      r.readAsDataURL(e.target.files[0]);
+      r.onload = () => { $('photoPreview').src = r.result; cy.getElementById(activeId).data('photo', r.result); };
+      if(e.target.files[0]) r.readAsDataURL(e.target.files[0]);
     };
 
-    document.getElementById('closeModal').onclick = closeEditModal;
-    document.getElementById('modalCloseX').onclick = closeEditModal;
+    // --- General Event Handling ---
+    cy.on('tap', 'node[type="badge"]', e => openEdit(cy.getElementById(e.target.data('parentId'))));
+    cy.on('position', 'node[type="person"]', e => updateOverlays(e.target));
+    cy.on('dragfree', 'node', e => e.target.position(snap(e.target.position())));
 
     cy.on('select unselect', () => {
-      const sel = cy.elements(':selected');
-      document.getElementById('btnMarriage').disabled = cy.nodes(':selected').length !== 2;
-      document.getElementById('btnChild').disabled = cy.nodes(':selected').length !== 2;
-      document.getElementById('disconnectNodes').disabled = sel.length === 0;
+      const s = cy.nodes(':selected');
+      $('btnMarriage').disabled = $('btnChild').disabled = s.length !== 2;
+      $('disconnectNodes').disabled = !s.length;
+      if (s.length > 0 && s.last().data('type') === 'person') {
+         if(!selOrder.includes(s.last())) selOrder.push(s.last());
+         if(selOrder.length > 2) selOrder.shift().unselect();
+      } else selOrder = [];
     });
 
-    cy.on('select', 'node', (evt) => {
-      const t = evt.target;
-      if (t.data('type') === 'badge' || t.data('type') === 'branchButton') return;
-      if (!selectionOrder.find(n => n.id() === t.id())) selectionOrder.push(t);
-      if (selectionOrder.length > 2) { 
-        const old = selectionOrder.shift();
-        if (old) old.unselect(); 
-      }
-    });
-
-    cy.on('dragfree', 'node', (evt) => {
-      const node = evt.target;
-      if (node.data('type') === 'person' || node.data('type') === 'union') node.position(snapToGrid(node.position()));
-    });
-
-    document.getElementById('saveTree').onclick = () => {
-      const exportData = { metadata: { version: "1.1", timestamp: new Date().toISOString() }, persons: [], unions: [] };
-      cy.nodes('[type="person"]').forEach(node => {
-        const d = node.data(), parentEdges = node.connectedEdges('edge[target="' + node.id() + '"][relType="parent-child"]');
-        exportData.persons.push({ id: d.id, info: { ...d }, visual: { position: node.position(), isCollapsed: cy.getElementById(d.id + '_branch').hasClass('collapsed-btn') } });
-      });
-      cy.nodes('[type="union"]').forEach(node => {
-        const partnerIds = node.connectedEdges('edge[relType="partner"]').sources().map(n => n.id()), childrenIds = node.connectedEdges('edge[relType="parent-child"]').targets().map(n => n.id());
-        exportData.unions.push({ id: node.id(), partners: partnerIds, children: childrenIds, visual: { position: node.position() } });
-      });
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'heritage_tree.json'; a.click();
+    $('btnMarriage').onclick = () => {
+      const [s,t] = selOrder.slice(-2);
+      const u = cy.add({group:'nodes', data:{id:uuid('u'), type:'union'}, position:snap({x:(s.position().x+t.position().x)/2, y:(s.position().y+t.position().y)/2+80})});
+      cy.add([{group:'edges', data:{source:s.id(), target:u.id(), relType:'partner'}}, {group:'edges', data:{source:t.id(), target:u.id(), relType:'partner'}}]);
+      cy.elements().unselect();
     };
 
-    document.getElementById('importTree').onchange = (e) => {
+    $('btnChild').onclick = () => {
+      const [s,t] = selOrder.slice(-2);
+      if(t.data('type')!=='person') return;
+      const uId = s.data('type')==='union' ? s.id() : s.neighborhood('node[type="union"]').first().id();
+      if(uId) cy.add({group:'edges', data:{source:uId, target:t.id(), relType:'parent-child'}});
+      cy.elements().unselect();
+    };
+
+    $('disconnectNodes').onclick = () => cy.elements(':selected').remove();
+    $('clearBoard').onclick = () => confirm("Clear?") && cy.elements().remove();
+    $('toggleTheme').onclick = () => document.body.classList.toggle('light');
+    $('searchToggleBtn').onclick = () => $('searchWrapper').style.display = $('searchWrapper').style.display === 'block' ? 'none' : 'block';
+    $('searchBar').oninput = e => {
+      const q = e.target.value.toLowerCase();
+      cy.nodes('[type="person"]').forEach(n => {
+        const m = (n.data('firstName')||'').toLowerCase().includes(q) || (n.data('lastName')||'').toLowerCase().includes(q);
+        n.style(m && q ? {'border-width':8, 'border-color':'#f59e0b'} : {'border-width':1, 'border-color':'#9ca3af'});
+      });
+    };
+
+    // --- Import/Export ---
+    $('saveTree').onclick = () => {
+      const data = { persons: [], unions: [] };
+      cy.nodes('[type="person"]').forEach(n => data.persons.push({ id: n.id(), data: n.data(), pos: n.position(), collapsed: cy.getElementById(n.id()+'_branch').hasClass('collapsed-btn') }));
+      cy.nodes('[type="union"]').forEach(n => data.unions.push({ id: n.id(), pos: n.position(), 
+        partners: n.connectedEdges('[relType="partner"]').sources().map(x=>x.id()),
+        children: n.connectedEdges('[relType="parent-child"]').targets().map(x=>x.id()) 
+      }));
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'})); a.download='tree.json'; a.click();
+    };
+
+    $('importTree').onchange = e => {
       const r = new FileReader();
       r.onload = () => {
         try {
-          const data = JSON.parse(r.result);
+          const d = JSON.parse(r.result);
           cy.elements().remove();
-          (data.persons || []).forEach(p => {
-            const node = cy.add({ group: 'nodes', data: { ...p.info, id: p.id, type: 'person', label: buildLabel(p.info.firstName, p.info.lastName, p.info.birthDate, p.info.deathDate) }, position: p.visual?.position });
-            createOverlays(node);
-            if (p.visual?.isCollapsed) cy.getElementById(p.id + '_branch').addClass('collapsed-btn');
+          (d.persons || []).forEach(p => {
+            // FIX: Handle both 'data' (new format) and 'info' (old format)
+            const pData = p.data || p.info || {};
+            if(!pData.id && p.id) pData.id = p.id; // Ensure ID exists
+            
+            // FIX: Handle both 'pos' (new format) and 'visual.position' (old format)
+            const pPos = p.pos || p.visual?.position || {x:0, y:0};
+            
+            addPerson(pData, pPos);
+            
+            // Handle collapsed state for both formats
+            const isCollapsed = (p.collapsed !== undefined) ? p.collapsed : (p.visual?.isCollapsed);
+            if(isCollapsed) cy.getElementById((pData.id || p.id)+'_branch').addClass('collapsed-btn');
           });
-          (data.unions || []).forEach(u => {
-            cy.add({ group: 'nodes', data: { id: u.id, type: 'union' }, position: u.visual?.position });
-            u.partners.forEach(pid => cy.add({ group: 'edges', data: { source: pid, target: u.id, relType: 'partner' } }));
-            u.children.forEach(cid => cy.add({ group: 'edges', data: { source: u.id, target: cid, relType: 'parent-child' } }));
+          (d.unions || []).forEach(u => {
+            const uPos = u.pos || u.visual?.position || {x:0, y:0};
+            cy.add({group:'nodes', data:{id:u.id, type:'union'}, position:uPos});
+            u.partners.forEach(pid => cy.add({group:'edges', data:{source:pid, target:u.id, relType:'partner'}}));
+            u.children.forEach(cid => cy.add({group:'edges', data:{source:u.id, target:cid, relType:'parent-child'}}));
           });
-          cy.nodes('.collapsed-btn').forEach(btn => {
-             const personNode = cy.getElementById(btn.data('parentId'));
-             if (personNode.nonempty()) getBranchElements(personNode).addClass('hidden');
-          });
+          cy.nodes('.collapsed-btn').forEach(b => getBranch(cy.getElementById(b.data('parentId')), true).addClass('hidden'));
           cy.fit();
-        } catch (err) { alert("Import failed."); }
+        } catch(err) { console.error(err); alert("Import failed: " + err.message); }
       };
-      if (e.target.files[0]) r.readAsText(e.target.files[0]);
+      if(e.target.files[0]) r.readAsText(e.target.files[0]);
     };
-
-    window.addEventListener('resize', () => cy.resize());
-    document.getElementById('searchToggleBtn').onclick = () => {
-      const wrap = document.getElementById('searchWrapper');
-      wrap.style.display = wrap.style.display === 'block' ? 'none' : 'block';
-    };
-    document.getElementById('searchBar').oninput = (e) => {
-      const q = e.target.value.toLowerCase();
-      cy.nodes('[type="person"]').forEach(n => {
-        const match = n.data('firstName')?.toLowerCase().includes(q) || n.data('lastName')?.toLowerCase().includes(q);
-        if (match && q !== "") n.animate({ style: { 'border-width': 8, 'border-color': '#f59e0b' } }, { duration: 200 });
-        else { n.removeStyle('border-width'); n.removeStyle('border-color'); }
-      });
-    };
+    window.onresize = () => cy.resize();
   </script>
 </body>
 </html>
