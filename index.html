@@ -353,7 +353,6 @@
 
     const cyElement = document.getElementById('cy');
 
-    // Logic: Disable default browser context menu to ensure custom app logic prevails
     cyElement.addEventListener('contextmenu', (e) => {
       e.preventDefault();
     }, false);
@@ -672,7 +671,8 @@
       return lp.join('\n');
     }
 
-    function getBranchElements(personNode, visited = new Set()) {
+    // UPDATED: Now supports recursive and non-recursive (step-wise) retrieval
+    function getBranchElements(personNode, recursive = true, visited = new Set()) {
       let collection = cy.collection();
       if (visited.has(personNode.id())) return collection;
       visited.add(personNode.id());
@@ -704,22 +704,38 @@
           collection = collection.union(pEdge).union(parentPerson);
           // Add parent overlays
           collection = collection.union(cy.getElementById(parentPerson.id() + '_badge'));
-          collection = collection.union(cy.getElementById(parentPerson.id() + '_branch'));
+          const parentBranchBtn = cy.getElementById(parentPerson.id() + '_branch');
+          collection = collection.union(parentBranchBtn);
           
-          // Recurse to find grandparents and their branches
-          collection = collection.union(getBranchElements(parentPerson, visited));
+          // Recurse to find grandparents and their branches only if requested
+          if (recursive) {
+            collection = collection.union(getBranchElements(parentPerson, true, visited));
+          }
         });
       });
 
       return collection;
     }
     
+    // UPDATED: Toggle logic splits between step-wise show and recursive hide
     cy.on('tap', 'node[type="branchButton"]', (evt) => {
       const btn = evt.target, personNode = cy.getElementById(btn.data('parentId'));
       if (personNode.empty()) return;
-      const branchItems = getBranchElements(personNode);
-      if (btn.hasClass('collapsed-btn')) { branchItems.removeClass('hidden'); btn.removeClass('collapsed-btn'); }
-      else { branchItems.addClass('hidden'); btn.addClass('collapsed-btn'); }
+
+      if (btn.hasClass('collapsed-btn')) {
+        // SHOW: Non-recursive (Step-wise)
+        const branchItems = getBranchElements(personNode, false);
+        branchItems.removeClass('hidden'); 
+        btn.removeClass('collapsed-btn'); 
+      } else { 
+        // HIDE: Recursive (Hide all)
+        const branchItems = getBranchElements(personNode, true);
+        branchItems.addClass('hidden');
+        
+        // Also force upstream buttons to collapsed state so they look correct when revealed later
+        branchItems.filter('node[type="branchButton"]').addClass('collapsed-btn');
+        btn.addClass('collapsed-btn'); 
+      }
     });
 
     cy.on('tap', 'node[type="badge"]', (evt) => {
