@@ -34,8 +34,7 @@
     
     /* Radial Menu */
     #radialMenuContainer { position: relative; width: 400px; height: 400px; display: flex; align-items: center; justify-content: center; }
-    .radial-btn { position: absolute; width: 80px; height: 80px; border-radius: 50%; background: #374151; border: 2px solid var(--brd); font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    .radial-btn:hover { transform: scale(1.1) translate(0); z-index: 10; }
+    .radial-btn { position: absolute; width: 80px; height: 80px; border-radius: 50%; background: #374151; border: 2px solid var(--brd); font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .rad-top { top: 20px; left: 50%; transform: translateX(-50%); background: #8b5cf6; }
     .rad-bottom { bottom: 20px; left: 50%; transform: translateX(-50%); background: #ec4899; }
     .rad-left { top: 50%; left: 20px; transform: translateY(-50%); background: #10b981; }
@@ -147,7 +146,7 @@
       ]
     });
 
-    // --- Node Logic ---
+    // --- Core Logic ---
     function buildLabel(f, l, b, d) {
       const n = [f, l].filter(s=>s?.trim()).join(' ');
       const y = d ? `${new Date(b).getFullYear()}–${new Date(d).getFullYear()}` : (b ? `${new Date(b).getFullYear()}–` : '');
@@ -155,27 +154,36 @@
     }
 
     function addPerson(data, pos) {
-      // Robustness: ensure data is an object
       data = data || {};
       const id = data.id || uuid();
-      const node = cy.add({ 
-        group: 'nodes', 
-        position: snap(pos || {x:0, y:0}),
-        data: { ...data, id, type: 'person', label: buildLabel(data.firstName, data.lastName, data.birthDate, data.deathDate), photo: data.photo || '' }
-      });
-      // Add Overlays
+      // Add Person and Overlays in one op (if batched by caller)
+      const p = snap(pos || {x:0, y:0});
+      const node = cy.add({ group: 'nodes', position: p, data: { ...data, id, type: 'person', label: buildLabel(data.firstName, data.lastName, data.birthDate, data.deathDate), photo: data.photo || '' } });
       cy.add([
-        { group: 'nodes', classes: 'overlay-btn', data: { id: id+'_badge', type: 'badge', parentId: id }, position: { x: (pos?.x||0)+50, y: (pos?.y||0)-60 }, grabbable: false },
-        { group: 'nodes', classes: 'overlay-btn', data: { id: id+'_branch', type: 'branchButton', parentId: id }, position: { x: (pos?.x||0), y: (pos?.y||0)-60 }, grabbable: false }
+        { group: 'nodes', classes: 'overlay-btn', data: { id: id+'_badge', type: 'badge', parentId: id }, position: { x: p.x+50, y: p.y-60 }, grabbable: false },
+        { group: 'nodes', classes: 'overlay-btn', data: { id: id+'_branch', type: 'branchButton', parentId: id }, position: { x: p.x, y: p.y-60 }, grabbable: false }
       ]);
       return node;
     }
 
-    function updateOverlays(node) {
-      const p = node.position();
-      cy.getElementById(node.id()+'_badge').position({ x: p.x+50, y: p.y-60 });
-      cy.getElementById(node.id()+'_branch').position({ x: p.x, y: p.y-60 });
+    // --- Efficient Overlay Updates ---
+    let rafId = null, updateQueue = new Set();
+    function flushUpdates() {
+      cy.batch(() => {
+        updateQueue.forEach(node => {
+          const p = node.position();
+          cy.getElementById(node.id()+'_badge').position({ x: p.x+50, y: p.y-60 });
+          cy.getElementById(node.id()+'_branch').position({ x: p.x, y: p.y-60 });
+        });
+      });
+      updateQueue.clear();
+      rafId = null;
     }
+    
+    cy.on('position', 'node[type="person"]', e => {
+      updateQueue.add(e.target);
+      if (!rafId) rafId = requestAnimationFrame(flushUpdates);
+    });
 
     // --- Interaction ---
     cy.on('cxttap', e => {
@@ -191,44 +199,46 @@
 
     $('confirmCreate').onclick = () => {
       if (!$('newFn').value && !$('newLn').value) return alert('Name required');
-      addPerson({ firstName: $('newFn').value, lastName: $('newLn').value, birthDate: $('newDob').value }, ctxPos);
+      cy.batch(() => addPerson({ firstName: $('newFn').value, lastName: $('newLn').value, birthDate: $('newDob').value }, ctxPos));
       toggleModal('createModal', 0);
     };
 
     window.radialAct = (act) => {
       if (!ctxNode) return;
-      const origin = ctxNode, oPos = origin.position();
-      const newPos = snap({ 
-        x: oPos.x + (act.includes('sibling') ? (act.includes('left')?-220:220) : (act==='partner'?200 : (act==='parent'?-100:0))),
-        y: oPos.y + (act === 'parent' ? -300 : (act === 'child' ? 300 : 0))
-      });
-      
-      const newNode = addPerson({ firstName: 'New', lastName: 'Member' }, newPos);
-      const addEdge = (s, t, r) => cy.add({ group: 'edges', data: { source: s, target: t, relType: r } });
-      const getUnion = (n, rel, dir) => n.connectedEdges(`edge[${dir}="${n.id()}"][relType="${rel}"]`).length > 0 ? n.connectedEdges(`edge[${dir}="${n.id()}"][relType="${rel}"]`)[0].source() : null;
+      cy.batch(() => { // Batch all operations
+        const origin = ctxNode, oPos = origin.position();
+        const newPos = snap({ 
+          x: oPos.x + (act.includes('sibling') ? (act.includes('left')?-220:220) : (act==='partner'?200 : (act==='parent'?-100:0))),
+          y: oPos.y + (act === 'parent' ? -300 : (act === 'child' ? 300 : 0))
+        });
+        
+        const newNode = addPerson({ firstName: 'New', lastName: 'Member' }, newPos);
+        const addEdge = (s, t, r) => cy.add({ group: 'edges', data: { source: s, target: t, relType: r } });
+        const getUnion = (n, r, d) => n.connectedEdges(`edge[${d}="${n.id()}"][relType="${r}"]`).map(e=>e.source()).first();
 
-      if (act === 'parent') {
-        let u = getUnion(origin, 'parent-child', 'target');
-        if (!u) {
-          u = cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: (oPos.x+newPos.x)/2, y: (oPos.y+newPos.y)/2+40}) });
-          addEdge(u.id(), origin.id(), 'parent-child');
+        if (act === 'parent') {
+          let u = getUnion(origin, 'parent-child', 'target');
+          if (!u || u.empty()) {
+            u = cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: (oPos.x+newPos.x)/2, y: (oPos.y+newPos.y)/2+40}) });
+            addEdge(u.id(), origin.id(), 'parent-child');
+          }
+          addEdge(newNode.id(), u.id(), 'partner');
+        } else if (act.includes('sibling')) {
+          let u = getUnion(origin, 'parent-child', 'target');
+          if (u && u.nonempty()) addEdge(u.id(), newNode.id(), 'parent-child');
+        } else if (act === 'child') {
+          const pEdge = origin.connectedEdges('edge[relType="partner"]');
+          let u = pEdge.nonempty() ? pEdge[0].target() : cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: oPos.x, y: oPos.y+80}) });
+          if (pEdge.empty()) addEdge(origin.id(), u.id(), 'partner');
+          addEdge(u.id(), newNode.id(), 'parent-child');
+        } else if (act === 'partner') {
+          const u = cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: (oPos.x+newPos.x)/2, y: oPos.y+80}) });
+          addEdge(origin.id(), u.id(), 'partner');
+          addEdge(newNode.id(), u.id(), 'partner');
         }
-        addEdge(newNode.id(), u.id(), 'partner');
-      } else if (act.includes('sibling')) {
-        let u = getUnion(origin, 'parent-child', 'target');
-        if (u) addEdge(u.id(), newNode.id(), 'parent-child');
-      } else if (act === 'child') {
-        const pEdge = origin.connectedEdges('edge[relType="partner"]');
-        let u = pEdge.length ? pEdge[0].target() : cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: oPos.x, y: oPos.y+80}) });
-        if (!pEdge.length) addEdge(origin.id(), u.id(), 'partner');
-        addEdge(u.id(), newNode.id(), 'parent-child');
-      } else if (act === 'partner') {
-        const u = cy.add({ group: 'nodes', data: { id: uuid('u'), type: 'union' }, position: snap({x: (oPos.x+newPos.x)/2, y: oPos.y+80}) });
-        addEdge(origin.id(), u.id(), 'partner');
-        addEdge(newNode.id(), u.id(), 'partner');
-      }
+        setTimeout(() => openEdit(newNode), 50);
+      });
       toggleModal('radialModal', 0);
-      setTimeout(() => openEdit(newNode), 100);
     };
 
     // --- Branch Visibility ---
@@ -236,15 +246,12 @@
       if (visited.has(node.id())) return cy.collection();
       visited.add(node.id());
       let set = cy.collection();
-      // Unions where node is child
       node.connectedEdges('edge[target="'+node.id()+'"][relType="parent-child"]').forEach(e => {
         const u = e.source();
         set = set.add(e).add(u);
-        // Siblings
         u.connectedEdges('edge[target!="'+node.id()+'"][relType="parent-child"]').forEach(se => {
             set = set.add(se).add(se.target()).add(cy.getElementById(se.target().id()+'_badge')).add(cy.getElementById(se.target().id()+'_branch'));
         });
-        // Parents
         u.connectedEdges('edge[relType="partner"]').forEach(pe => {
             const p = pe.source();
             set = set.add(pe).add(p).add(cy.getElementById(p.id()+'_badge')).add(cy.getElementById(p.id()+'_branch'));
@@ -269,48 +276,50 @@
 
     // --- Auto Align ---
     $('btnAutoAlign').onclick = () => {
-      const nodes = cy.nodes('[type="person"]');
-      if (!nodes.length) return;
-      const depths = new Map();
-      const getDepth = n => {
-        if (depths.has(n.id())) return depths.get(n.id());
-        let d = 0;
-        n.connectedEdges('edge[source="'+n.id()+'"][relType="partner"]').targets().forEach(u => {
-          u.connectedEdges('edge[relType="parent-child"]').targets().forEach(c => d = Math.max(d, getDepth(c)));
-        });
-        depths.set(n.id(), d + 1); return d + 1;
-      };
-      nodes.forEach(getDepth);
-      const maxD = Math.max(...depths.values());
-      nodes.forEach(n => depths.set(n.id(), maxD - depths.get(n.id()))); // Invert depth
-
-      let curX = 0, vis = new Set();
-      const layout = (n, gen) => {
-        if (vis.has(n.id())) return;
-        vis.add(n.id());
-        const unions = n.connectedEdges('edge[source="'+n.id()+'"][relType="partner"]').targets();
-        if (!unions.length) { n.position(snap({x: curX, y: gen*300})); curX += 220; return; }
-        
-        let cxSum = 0, cCount = 0;
-        unions.forEach(u => {
-          u.connectedEdges('edge[relType="parent-child"]').targets().sort((a,b) => (new Date(a.data('birthDate')||'9999') - new Date(b.data('birthDate')||'9999'))).forEach(c => {
-            layout(c, gen + 1);
-            cxSum += c.position().x; cCount++;
+      cy.batch(() => {
+        const nodes = cy.nodes('[type="person"]');
+        if (!nodes.length) return;
+        const depths = new Map();
+        const getDepth = n => {
+          if (depths.has(n.id())) return depths.get(n.id());
+          let d = 0;
+          n.connectedEdges('edge[source="'+n.id()+'"][relType="partner"]').targets().forEach(u => {
+            u.connectedEdges('edge[relType="parent-child"]').targets().forEach(c => d = Math.max(d, getDepth(c)));
           });
-        });
+          depths.set(n.id(), d + 1); return d + 1;
+        };
+        nodes.forEach(getDepth);
+        const maxD = Math.max(...depths.values());
+        nodes.forEach(n => depths.set(n.id(), maxD - depths.get(n.id()))); 
 
-        const mid = cCount ? cxSum/cCount : curX;
-        if (!cCount) curX += 220;
-        n.position(snap({x: mid - 80, y: gen*300}));
-        
-        unions.forEach(u => {
-          const ptr = u.connectedEdges('edge[relType="partner"]').sources().filter(p => p.id() !== n.id()).first();
-          if (ptr.nonempty()) { vis.add(ptr.id()); ptr.position(snap({x: mid + 80, y: gen*300})); updateOverlays(ptr); }
-          u.position(snap({x: mid, y: gen*300 + 80}));
-        });
-        updateOverlays(n);
-      };
-      nodes.filter(n => !n.connectedEdges('edge[target="'+n.id()+'"][relType="parent-child"]').length).forEach(r => layout(r, depths.get(r.id())));
+        let curX = 0, vis = new Set();
+        const layout = (n, gen) => {
+          if (vis.has(n.id())) return;
+          vis.add(n.id());
+          const unions = n.connectedEdges('edge[source="'+n.id()+'"][relType="partner"]').targets();
+          if (!unions.length) { n.position(snap({x: curX, y: gen*300})); curX += 220; updateQueue.add(n); return; }
+          
+          let cxSum = 0, cCount = 0;
+          unions.forEach(u => {
+            u.connectedEdges('edge[relType="parent-child"]').targets().sort((a,b) => (new Date(a.data('birthDate')||'9999') - new Date(b.data('birthDate')||'9999'))).forEach(c => {
+              layout(c, gen + 1);
+              cxSum += c.position().x; cCount++;
+            });
+          });
+
+          const mid = cCount ? cxSum/cCount : curX;
+          if (!cCount) curX += 220;
+          n.position(snap({x: mid - 80, y: gen*300})); updateQueue.add(n);
+          
+          unions.forEach(u => {
+            const ptr = u.connectedEdges('edge[relType="partner"]').sources().filter(p => p.id() !== n.id()).first();
+            if (ptr.nonempty()) { vis.add(ptr.id()); ptr.position(snap({x: mid + 80, y: gen*300})); updateQueue.add(ptr); }
+            u.position(snap({x: mid, y: gen*300 + 80}));
+          });
+        };
+        nodes.filter(n => !n.connectedEdges('edge[target="'+n.id()+'"][relType="parent-child"]').length).forEach(r => layout(r, depths.get(r.id())));
+      });
+      if(!rafId) rafId = requestAnimationFrame(flushUpdates); // Ensure overlays sync after batch
       cy.fit();
     };
 
@@ -330,9 +339,11 @@
     };
 
     $('delNode').onclick = () => {
-      cy.getElementById(activeId).remove();
-      cy.getElementById(activeId+'_badge').remove();
-      cy.getElementById(activeId+'_branch').remove();
+      cy.batch(() => {
+          cy.getElementById(activeId).remove();
+          cy.getElementById(activeId+'_badge').remove();
+          cy.getElementById(activeId+'_branch').remove();
+      });
       toggleModal('editModal', 0);
     };
 
@@ -342,9 +353,8 @@
       if(e.target.files[0]) r.readAsDataURL(e.target.files[0]);
     };
 
-    // --- General Event Handling ---
+    // --- General Events ---
     cy.on('tap', 'node[type="badge"]', e => openEdit(cy.getElementById(e.target.data('parentId'))));
-    cy.on('position', 'node[type="person"]', e => updateOverlays(e.target));
     cy.on('dragfree', 'node', e => e.target.position(snap(e.target.position())));
 
     cy.on('select unselect', () => {
@@ -358,9 +368,11 @@
     });
 
     $('btnMarriage').onclick = () => {
-      const [s,t] = selOrder.slice(-2);
-      const u = cy.add({group:'nodes', data:{id:uuid('u'), type:'union'}, position:snap({x:(s.position().x+t.position().x)/2, y:(s.position().y+t.position().y)/2+80})});
-      cy.add([{group:'edges', data:{source:s.id(), target:u.id(), relType:'partner'}}, {group:'edges', data:{source:t.id(), target:u.id(), relType:'partner'}}]);
+      cy.batch(() => {
+        const [s,t] = selOrder.slice(-2);
+        const u = cy.add({group:'nodes', data:{id:uuid('u'), type:'union'}, position:snap({x:(s.position().x+t.position().x)/2, y:(s.position().y+t.position().y)/2+80})});
+        cy.add([{group:'edges', data:{source:s.id(), target:u.id(), relType:'partner'}}, {group:'edges', data:{source:t.id(), target:u.id(), relType:'partner'}}]);
+      });
       cy.elements().unselect();
     };
 
@@ -400,28 +412,24 @@
       r.onload = () => {
         try {
           const d = JSON.parse(r.result);
-          cy.elements().remove();
-          (d.persons || []).forEach(p => {
-            // FIX: Handle both 'data' (new format) and 'info' (old format)
-            const pData = p.data || p.info || {};
-            if(!pData.id && p.id) pData.id = p.id; // Ensure ID exists
-            
-            // FIX: Handle both 'pos' (new format) and 'visual.position' (old format)
-            const pPos = p.pos || p.visual?.position || {x:0, y:0};
-            
-            addPerson(pData, pPos);
-            
-            // Handle collapsed state for both formats
-            const isCollapsed = (p.collapsed !== undefined) ? p.collapsed : (p.visual?.isCollapsed);
-            if(isCollapsed) cy.getElementById((pData.id || p.id)+'_branch').addClass('collapsed-btn');
+          cy.batch(() => { // Batch entire import
+            cy.elements().remove();
+            (d.persons || []).forEach(p => {
+              const pData = p.data || p.info || {};
+              if(!pData.id && p.id) pData.id = p.id;
+              const pPos = p.pos || p.visual?.position || {x:0, y:0};
+              addPerson(pData, pPos);
+              const isCollapsed = (p.collapsed !== undefined) ? p.collapsed : (p.visual?.isCollapsed);
+              if(isCollapsed) cy.getElementById((pData.id || p.id)+'_branch').addClass('collapsed-btn');
+            });
+            (d.unions || []).forEach(u => {
+              const uPos = u.pos || u.visual?.position || {x:0, y:0};
+              cy.add({group:'nodes', data:{id:u.id, type:'union'}, position:uPos});
+              u.partners.forEach(pid => cy.add({group:'edges', data:{source:pid, target:u.id, relType:'partner'}}));
+              u.children.forEach(cid => cy.add({group:'edges', data:{source:u.id, target:cid, relType:'parent-child'}}));
+            });
+            cy.nodes('.collapsed-btn').forEach(b => getBranch(cy.getElementById(b.data('parentId')), true).addClass('hidden'));
           });
-          (d.unions || []).forEach(u => {
-            const uPos = u.pos || u.visual?.position || {x:0, y:0};
-            cy.add({group:'nodes', data:{id:u.id, type:'union'}, position:uPos});
-            u.partners.forEach(pid => cy.add({group:'edges', data:{source:pid, target:u.id, relType:'partner'}}));
-            u.children.forEach(cid => cy.add({group:'edges', data:{source:u.id, target:cid, relType:'parent-child'}}));
-          });
-          cy.nodes('.collapsed-btn').forEach(b => getBranch(cy.getElementById(b.data('parentId')), true).addClass('hidden'));
           cy.fit();
         } catch(err) { console.error(err); alert("Import failed: " + err.message); }
       };
